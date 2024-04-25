@@ -1,3 +1,5 @@
+from typing import Optional
+from typing_extensions import Literal
 from tqdm import tqdm
 from transformers import AutoTokenizer  # type: ignore
 from pydantic import BaseModel, Field
@@ -11,7 +13,7 @@ import torch
 
 class ScriptArguments(BaseModel):
     model: str = Field(
-        "meta-llama/Llama-2-7b-chat-hf",
+        "meta-llama/Llama-2-7b-hf",
         title="Model",
         description="The HF model to use for text generation",
     )
@@ -45,20 +47,26 @@ class ScriptArguments(BaseModel):
         title="Batch Size",
         description="The batch size for generation",
     )
-    save_path: str = Field(
+    save_path: Optional[str] = Field(
+        None,
         title=".csv Save Path",
         description="The path to save the generated outputs",
+    )
+    device: Literal["auto", "cuda:0", "cuda:1"] = Field(
+        "auto",
+        title="Device",
+        description="The device to use for generation",
     )
 
 
 def main():
 
-    # 1. Parse arguments
+    # Parse arguments
     parser = ArgumentParser(model=ScriptArguments)
     args = parser.parse_typed_args()
 
-    # 2. Construct prompts
-    dataset = load_dataset("Anthropic/hh-rlhf", data_dir="harmless-base")["test"]
+    # Construct prompts
+    dataset = load_dataset("Anthropic/hh-rlhf")["test"]
     sampled_dataset = dataset.shuffle(seed=args.prompt_selection_seed).select(
         range(args.num_prompts)
     )
@@ -68,41 +76,41 @@ def main():
         }
     )
 
-    # 3. Set seed for generation
-    torch.manual_seed(args.generation_seed)
-    torch.cuda.manual_seed_all(args.generation_seed)
-    torch.use_deterministic_algorithms(True)
-
-    # 4. load model
+    # Load model
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     pipeline = transformers.pipeline(
         "text-generation",
         model=args.model,
         torch_dtype=torch.float16,
-        device_map="auto",
+        device_map=args.device,
     )
 
+    # Generate
     outputs = dict(prompt=[], generated_text=[])
     for row in tqdm(prompts):
-        sequences = pipeline(
-            row["prompt"],
-            do_sample=True,
-            num_return_sequences=args.num_generations_per_prompt,
-            eos_token_id=tokenizer.eos_token_id,
-            max_length=args.max_length,
-            temperature=1.0,
-            top_p=1.0,
-            top_k=0,
-            batch_size=args.batch_size,
-        )["generated_text"]
-        outputs["prompt"].extend([row["prompt"]] * len(sequences))
-        outputs["generated_text"].extend(sequences)
+        for _ in range(args.num_generations_per_prompt):
+            sequences = pipeline(
+                row["prompt"],
+                do_sample=True,
+                num_return_sequences=1,
+                eos_token_id=tokenizer.eos_token_id,
+                max_length=args.max_length,
+                truncation=True,
+                top_p=0.95,
+                batch_size=args.batch_size,
+            )
+            assert len(sequences) == 1
+            outputs["prompt"].append(row["prompt"])
+            outputs["generated_text"].append(sequences[0]["generated_text"])
 
-    # 5. Save outputs
-    assert args.save_path is not None, "Save path must be provided"
-    assert args.save_path.endswith(".csv"), "Save path must be a .csv file"
-    outputs_as_df = pd.DataFrame(outputs)
-    outputs_as_df.to_csv(args.save_path, index=False)
+    # Save outputs
+    save_path = (
+        args.save_path
+        or f"{args.model.replace('/', '-')}_l{args.max_length}_seed{args.generation_seed}_promptseed{args.prompt_selection_seed}_numprompt{args.num_prompts}_numgenerations{args.num_generations_per_prompt}.csv"
+    )
+    assert save_path.endswith(".csv"), "Save path must be a .csv file"
+    outputs_as_df = pd.DataFrame.from_dict(outputs)
+    outputs_as_df.to_csv(save_path, index=False)
 
 
 if __name__ == "__main__":
