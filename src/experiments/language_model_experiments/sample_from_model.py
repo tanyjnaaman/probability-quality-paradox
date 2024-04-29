@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Dict, List, Optional
 from typing_extensions import Literal
 from tqdm import tqdm
 from transformers import AutoTokenizer  # type: ignore
@@ -86,7 +86,7 @@ def main():
     )
 
     # Generate
-    outputs = dict(prompt=[], generated_text=[])
+    outputs: Dict[str, List[str]] = dict(prompt=[], generated_text=[])
     for row in tqdm(prompts):
         for _ in range(args.num_generations_per_prompt):
             sequences = pipeline(
@@ -106,7 +106,7 @@ def main():
     # Save outputs
     save_path = (
         args.save_path
-        or f"{args.model.replace('/', '-')}_l{args.max_length}_seed{args.generation_seed}_promptseed{args.prompt_selection_seed}_numprompt{args.num_prompts}_numgenerations{args.num_generations_per_prompt}_{args.sampling_type}.csv"
+        or f"{args.model.replace('/', '-')}_l{args.max_length}_promptseed{args.prompt_selection_seed}_numprompt{args.num_prompts}_numgenerations{args.num_generations_per_prompt}_{args.sampling_type}.csv"
     )
     assert save_path.endswith(".csv"), "Save path must be a .csv file"
     outputs_as_df = pd.DataFrame.from_dict(outputs)

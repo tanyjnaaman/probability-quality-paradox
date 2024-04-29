@@ -1,5 +1,6 @@
 # data files
 *.csv
+backup/
 
 # cache
 __pycache__/

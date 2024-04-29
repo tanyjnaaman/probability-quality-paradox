@@ -5,7 +5,6 @@ from transformers import AutoTokenizer  # type: ignore
 from pydantic import BaseModel, Field
 from pydantic_argparse import ArgumentParser
 from src.packages.safe_rlhf import AutoModelForScore
-import transformers
 import pandas as pd
 import torch
 
@@ -68,7 +67,13 @@ def main():
     scores = []
     for i in tqdm(range(0, len(texts), args.batch_size)):
         batch = texts[i : i + args.batch_size]
-        inputs = tokenizer(batch, padding=True, truncation=True, return_tensors="pt")
+        inputs = tokenizer(
+            batch,
+            padding=True,
+            truncation=True,
+            return_tensors="pt",
+            max_length=args.max_length,
+        )
         with torch.no_grad():
             outputs = reward_model(**inputs)
             batch_scores = outputs.end_scores.squeeze(dim=-1).cpu().tolist()
@@ -78,9 +83,10 @@ def main():
     df["score"] = scores
     if not args.save_path:
         print(
-            "No save path provided. Saving to the input file with '_scored' appended."
+            "No save path provided. Saving to the input file with '_scoredreward'"
+            " appended."
         )
-        args.save_path = args.csv_file_path.replace(".csv", "_scored.csv")
+        args.save_path = args.csv_file_path.replace(".csv", "_scoredreward.csv")
     df.to_csv(args.save_path, index=False)
 
 
