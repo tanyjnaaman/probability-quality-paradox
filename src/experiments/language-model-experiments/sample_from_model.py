@@ -22,11 +22,6 @@ class ScriptArguments(BaseModel):
         title="Max Length",
         description="The maximum length of the generated text",
     )
-    generation_seed: int = Field(
-        42,
-        title="Generation Seed",
-        description="The seed for generating strings",
-    )
     prompt_selection_seed: int = Field(
         42,
         title="Prompt Selection Seed",
@@ -56,6 +51,11 @@ class ScriptArguments(BaseModel):
         "auto",
         title="Device",
         description="The device to use for generation",
+    )
+    sampling_type: Literal["top_p095", "ancestral", "top_k640"] = Field(
+        "top_p095",
+        title="Sampling Type",
+        description="The sampling type to use for generation",
     )
 
 
@@ -106,7 +106,7 @@ def main():
     # Save outputs
     save_path = (
         args.save_path
-        or f"{args.model.replace('/', '-')}_l{args.max_length}_seed{args.generation_seed}_promptseed{args.prompt_selection_seed}_numprompt{args.num_prompts}_numgenerations{args.num_generations_per_prompt}.csv"
+        or f"{args.model.replace('/', '-')}_l{args.max_length}_seed{args.generation_seed}_promptseed{args.prompt_selection_seed}_numprompt{args.num_prompts}_numgenerations{args.num_generations_per_prompt}_{args.sampling_type}.csv"
     )
     assert save_path.endswith(".csv"), "Save path must be a .csv file"
     outputs_as_df = pd.DataFrame.from_dict(outputs)
