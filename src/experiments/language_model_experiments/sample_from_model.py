@@ -86,7 +86,7 @@ def main():
     prompts = sampled_dataset.map(
         lambda pair: {
             "prompt": (
-                pair["chosen"].split("\n\n")[1].lstrip("Human: ").strip()
+                pair["chosen"].split("\n\n")[1].lstrip("Human:").strip()
                 if not args.human_assistant_format
                 else pair["chosen"].split("\n\n")[1].strip() + "\n\nAssistant:"
             )
@@ -120,7 +120,7 @@ def main():
         )
         assert len(sequences) == args.num_generations_per_prompt
         generated_texts = [
-            sequence[0]["generated_text"][len(row["prompt"]) :].strip()
+            sequence[0]["generated_text"][len(row["prompt"].strip()) :].strip()
             for sequence in sequences
         ]
         outputs["prompt"].extend(batched_prompts)
