@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import List, Optional
 from typing_extensions import Literal
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM  # type: ignore
@@ -49,6 +49,14 @@ class ScriptArguments(BaseModel):
         title="Add Start Token",
         description="Whether to add a start token to the input",
     )
+    add_human_assistant_format: bool = Field(
+        False,
+        title="Human Assistant Format",
+        description=(
+            "Whether to wrap text with human assistant format, e.g. 'Human: prompt..."
+            " \n\nAssistant: text'"
+        ),
+    )
 
 
 def main():
@@ -61,15 +69,27 @@ def main():
     df = pd.read_csv(args.csv_file_path)
     print(df.head())
     print(df.shape)
-    texts = df["generated_text"].tolist()
+    raw_texts: List[str] = df["generated_text"].tolist()
+    prompts: List[str] = df["prompt"].tolist()
+    texts = (
+        [
+            f"Human: {prompt} Assistant:"
+            f" {text[len(prompt):] if text.startswith(prompt) else text}"
+            for prompt, text in zip(prompts, raw_texts)
+        ]
+        if args.add_human_assistant_format
+        else raw_texts
+    )
+    print(f"Examples: {texts[:3]}")
 
     # Load the language model
-    model = AutoModelForCausalLM.from_pretrained(args.language_model)
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.language_model, device_model=args.device
+    model = AutoModelForCausalLM.from_pretrained(
+        args.language_model, device_map=args.device
     )
+    tokenizer = AutoTokenizer.from_pretrained(args.language_model)
 
-    # Set up tokenization
+    # Compute negative log likelihoods
+    # NOTE: lifted from https://github.com/huggingface/evaluate/blob/main/metrics/perplexity/perplexity.py
     # if batch_size > 1 (which generally leads to padding being required), and
     # if there is not an already assigned pad_token, assign an existing
     # special token to also be the padding token
@@ -94,7 +114,7 @@ def main():
         max_tokenized_len = args.max_length
 
     # Batch wise tokenization and scoring
-    # NOTE: lifted from https://github.com/huggingface/evaluate/blob/main/metrics/perplexity/perplexity.py
+    nlls = []
     for i in tqdm(range(0, len(texts), args.batch_size)):
         batch = texts[i : i + args.batch_size]
         inputs = tokenizer(
@@ -122,7 +142,6 @@ def main():
                 " only one token, and remove all empty input strings."
             )
 
-        nlls = []
         loss_fct = CrossEntropyLoss(reduction="none")
 
         if args.add_start_token:
@@ -150,7 +169,7 @@ def main():
         nll_batch = (
             loss_fct(shift_logits.transpose(1, 2), shift_labels)
             * shift_attention_mask_batch
-        ).sum(1)
+        ).sum(dim=1)
 
         nlls += nll_batch.tolist()
 

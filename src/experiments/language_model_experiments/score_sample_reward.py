@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional
 from typing_extensions import Literal
 from tqdm import tqdm
 from transformers import AutoTokenizer  # type: ignore
@@ -42,6 +42,14 @@ class ScriptArguments(BaseModel):
         title="Device",
         description="The device to use for generation",
     )
+    add_human_assistant_format: bool = Field(
+        False,
+        title="Human Assistant Format",
+        description=(
+            "Whether to wrap text with human assistant format, e.g. 'Human: prompt..."
+            " \n\nAssistant: text'"
+        ),
+    )
 
 
 def main():
@@ -63,7 +71,17 @@ def main():
     reward_model.eval()
 
     # Score the data
-    texts = df["generated_text"].tolist()
+    raw_texts: List[str] = df["generated_text"].tolist()
+    prompts: List[str] = df["prompt"].tolist()
+    texts = (
+        [
+            f"Human: {prompt} Assistant:"
+            f" {text[len(prompt):] if text.startswith(prompt) else text}"
+            for prompt, text in zip(prompts, raw_texts)
+        ]
+        if args.add_human_assistant_format
+        else raw_texts
+    )
     scores = []
     for i in tqdm(range(0, len(texts), args.batch_size)):
         batch = texts[i : i + args.batch_size]
@@ -86,7 +104,10 @@ def main():
             "No save path provided. Saving to the input file with '_scoredreward'"
             " appended."
         )
-        args.save_path = args.csv_file_path.replace(".csv", "_scoredreward.csv")
+        args.save_path = args.csv_file_path.replace(
+            ".csv",
+            f"_scoredreward{'_humanassistant' if args.add_human_assistant_format else ''}.csv",
+        )
     df.to_csv(args.save_path, index=False)
 
 

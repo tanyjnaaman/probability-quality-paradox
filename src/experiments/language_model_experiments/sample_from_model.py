@@ -28,12 +28,12 @@ class ScriptArguments(BaseModel):
         description="The seed for selecting prompts",
     )
     num_prompts: int = Field(
-        500,
+        1000,
         title="Number of Prompts",
         description="The number of prompts to use for generation",
     )
     num_generations_per_prompt: int = Field(
-        100,
+        50,
         title="Number of Generations per Prompt",
         description="The number of generations to generate per prompt",
     )
@@ -57,6 +57,14 @@ class ScriptArguments(BaseModel):
         title="Sampling Type",
         description="The sampling type to use for generation",
     )
+    human_assistant_format: bool = Field(
+        False,
+        title="Human Assistant Format",
+        description=(
+            "Whether the prompt is in human assistant format, e.g. 'Human: ..."
+            " \n\nAssistant:'"
+        ),
+    )
 
 
 def main():
@@ -72,7 +80,11 @@ def main():
     )
     prompts = sampled_dataset.map(
         lambda pair: {
-            "prompt": pair["chosen"].split("\n\n")[1].lstrip("Human: ").strip()
+            "prompt": (
+                pair["chosen"].split("\n\n")[1].lstrip("Human: ").strip()
+                if not args.human_assistant_format
+                else pair["chosen"].split("\n\n")[1].strip() + "\n\nAssistant:"
+            )
         }
     )
 
@@ -106,7 +118,7 @@ def main():
     # Save outputs
     save_path = (
         args.save_path
-        or f"{args.model.replace('/', '-')}_l{args.max_length}_promptseed{args.prompt_selection_seed}_numprompt{args.num_prompts}_numgenerations{args.num_generations_per_prompt}_{args.sampling_type}.csv"
+        or f"{args.model.replace('/', '-')}_l{args.max_length}_promptseed{args.prompt_selection_seed}_numprompt{args.num_prompts}_numgenerations{args.num_generations_per_prompt}_{args.sampling_type}{'_humanassistant' if args.human_assistant_format else ''}.csv"
     )
     assert save_path.endswith(".csv"), "Save path must be a .csv file"
     outputs_as_df = pd.DataFrame.from_dict(outputs)
