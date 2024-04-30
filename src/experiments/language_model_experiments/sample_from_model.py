@@ -57,6 +57,11 @@ class ScriptArguments(BaseModel):
         title="Sampling Type",
         description="The sampling type to use for generation",
     )
+    sampling_temperature: float = Field(
+        1.0,
+        title="Sampling Temperature",
+        description="The temperature to use for sampling",
+    )
     human_assistant_format: bool = Field(
         False,
         title="Human Assistant Format",
@@ -110,6 +115,7 @@ def main():
             max_length=args.max_length,
             truncation=True,
             top_p=0.95,
+            temperature=args.sampling_temperature,
             batch_size=args.batch_size,
         )
         assert len(sequences) == args.num_generations_per_prompt
@@ -124,7 +130,7 @@ def main():
     # Save outputs
     save_path = (
         args.save_path
-        or f"{args.model.replace('/', '-')}_l{args.max_length}_promptseed{args.prompt_selection_seed}_numprompt{args.num_prompts}_numgenerations{args.num_generations_per_prompt}_{args.sampling_type}{'_humanassistant' if args.human_assistant_format else ''}.csv"
+        or f"{args.model.replace('/', '-')}_l{args.max_length}_promptseed{args.prompt_selection_seed}_numprompt{args.num_prompts}_numgenerations{args.num_generations_per_prompt}_{args.sampling_type}_t{args.sampling_temperature}{'_humanassistant' if args.human_assistant_format else ''}.csv"
     )
     assert save_path.endswith(".csv"), "Save path must be a .csv file"
     outputs_as_df = pd.DataFrame.from_dict(outputs)

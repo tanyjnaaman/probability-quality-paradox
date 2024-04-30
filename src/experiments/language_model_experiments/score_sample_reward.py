@@ -50,6 +50,27 @@ class ScriptArguments(BaseModel):
             " \n\nAssistant: text'"
         ),
     )
+    include_prompt: bool = Field(
+        True,
+        title="Include Prompt",
+        description="Whether to include the prompt in the text",
+    )
+
+
+def transform_prompt_and_text(
+    prompt: str, text: str, add_human_assistant_format: bool, include_prompt: bool
+) -> str:
+    assert (include_prompt and not add_human_assistant_format) or not include_prompt
+    if not include_prompt:
+        return text[len(prompt) :].strip() if text.startswith(prompt) else text
+    return (
+        f"Human: {prompt} Assistant:"
+        f" {text[len(prompt):].strip() if text.startswith(prompt) else text}"
+        if add_human_assistant_format
+        else (
+            f"{prompt}{text[len(prompt):].strip() if text.startswith(prompt) else text}"
+        )
+    )
 
 
 def main():
@@ -73,20 +94,19 @@ def main():
     # Score the data
     raw_texts: List[str] = df["generated_text"].tolist()
     prompts: List[str] = df["prompt"].tolist()
-    texts = (
-        [
-            f"Human: {prompt} Assistant:"
-            f" {text[len(prompt):] if text.startswith(prompt) else text}"
-            for prompt, text in zip(prompts, raw_texts)
-        ]
-        if args.add_human_assistant_format
-        else raw_texts
-    )
+    texts = [
+        transform_prompt_and_text(
+            prompt, text, args.add_human_assistant_format, args.include_prompt
+        )
+        for prompt, text in zip(prompts, raw_texts)
+    ]
     print(f"Examples: {texts[:3]}")
 
     scores = []
     for i in tqdm(range(0, len(texts), args.batch_size)):
         batch = texts[i : i + args.batch_size]
+        print(f"Batch example: {batch[:3]}")
+
         inputs = tokenizer(
             batch,
             padding=True,
@@ -101,6 +121,7 @@ def main():
 
     # Save the scores
     df["score"] = scores
+    df["score_text"] = texts
     if not args.save_path:
         print(
             "No save path provided. Saving to the input file with '_scoredreward'"
@@ -108,7 +129,7 @@ def main():
         )
         args.save_path = args.csv_file_path.replace(
             ".csv",
-            f"_scoredreward{'_humanassistant' if args.add_human_assistant_format else ''}.csv",
+            f"_scoredreward{'_humanassistant' if args.add_human_assistant_format else ''}{'_includeprompt' if args.include_prompt else ''}.csv",
         )
     df.to_csv(args.save_path, index=False)
 
