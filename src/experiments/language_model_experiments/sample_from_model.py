@@ -28,12 +28,12 @@ class ScriptArguments(BaseModel):
         description="The seed for selecting prompts",
     )
     num_prompts: int = Field(
-        1000,
+        5000,
         title="Number of Prompts",
         description="The number of prompts to use for generation",
     )
     num_generations_per_prompt: int = Field(
-        50,
+        10,
         title="Number of Generations per Prompt",
         description="The number of generations to generate per prompt",
     )
@@ -87,6 +87,7 @@ def main():
             )
         }
     )
+    print(f"Example prompts: {prompts['prompt'][:3]}")
 
     # Load model
     tokenizer = AutoTokenizer.from_pretrained(args.model)
@@ -100,20 +101,25 @@ def main():
     # Generate
     outputs: Dict[str, List[str]] = dict(prompt=[], generated_text=[])
     for row in tqdm(prompts):
-        for _ in range(args.num_generations_per_prompt):
-            sequences = pipeline(
-                row["prompt"],
-                do_sample=True,
-                num_return_sequences=1,
-                eos_token_id=tokenizer.eos_token_id,
-                max_length=args.max_length,
-                truncation=True,
-                top_p=0.95,
-                batch_size=args.batch_size,
-            )
-            assert len(sequences) == 1
-            outputs["prompt"].append(row["prompt"])
-            outputs["generated_text"].append(sequences[0]["generated_text"])
+        batched_prompts = [row["prompt"]] * args.num_generations_per_prompt
+        sequences = pipeline(
+            batched_prompts,
+            do_sample=True,
+            num_return_sequences=1,
+            eos_token_id=tokenizer.eos_token_id,
+            max_length=args.max_length,
+            truncation=True,
+            top_p=0.95,
+            batch_size=args.batch_size,
+        )
+        assert len(sequences) == args.num_generations_per_prompt
+        generated_texts = [
+            sequence[0]["generated_text"][len(row["prompt"]) :].strip()
+            for sequence in sequences
+        ]
+        outputs["prompt"].extend(batched_prompts)
+        outputs["generated_text"].extend(generated_texts)
+        print(f"Prompt completed: {row['prompt']}\nGenerated: {generated_texts[0]}")
 
     # Save outputs
     save_path = (

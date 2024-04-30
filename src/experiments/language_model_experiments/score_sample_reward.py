@@ -82,6 +82,8 @@ def main():
         if args.add_human_assistant_format
         else raw_texts
     )
+    print(f"Examples: {texts[:3]}")
+
     scores = []
     for i in tqdm(range(0, len(texts), args.batch_size)):
         batch = texts[i : i + args.batch_size]

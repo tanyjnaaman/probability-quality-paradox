@@ -71,15 +71,15 @@ def main():
     print(df.shape)
     raw_texts: List[str] = df["generated_text"].tolist()
     prompts: List[str] = df["prompt"].tolist()
-    texts = (
-        [
+    texts = [
+        (
             f"Human: {prompt} Assistant:"
-            f" {text[len(prompt):] if text.startswith(prompt) else text}"
-            for prompt, text in zip(prompts, raw_texts)
-        ]
-        if args.add_human_assistant_format
-        else raw_texts
-    )
+            f" {text[len(prompt):] if text.startswith(prompt) else text}"  # strip the prompt
+            if args.add_human_assistant_format
+            else f"{text[len(prompt):] if text.startswith(prompt) else text}"
+        )
+        for prompt, text in zip(prompts, raw_texts)
+    ]
     print(f"Examples: {texts[:3]}")
 
     # Load the language model
