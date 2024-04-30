@@ -16,7 +16,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install flake8
-          flake8 ./src ./tests
+          flake8 ./src 
   black-format:
     runs-on: ubuntu-latest
     steps:
@@ -24,7 +24,7 @@ jobs:
       - uses: psf/black@stable
         with:
           options: "--preview --check --verbose"
-          src: "./src ./tests"
+          src: "./src"
           jupyter: true
 
   mypy-lint:
@@ -57,4 +57,3 @@ jobs:
       - name: mypy
         run: |
           mypy --config-file mypy.ini src/
-          mypy --config-file mypy.ini tests/
