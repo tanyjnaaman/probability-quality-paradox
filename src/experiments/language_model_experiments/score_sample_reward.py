@@ -60,16 +60,19 @@ class ScriptArguments(BaseModel):
 def transform_prompt_and_text(
     prompt: str, text: str, add_human_assistant_format: bool, include_prompt: bool
 ) -> str:
-    assert (include_prompt and not add_human_assistant_format) or not include_prompt
+    assert (not include_prompt and not add_human_assistant_format) or include_prompt
+    stripped_prompt = (
+        prompt[len("Human: ") :][: -len("Assistant:")]
+        if ("Human:" in prompt and "Assistant" in prompt)
+        else prompt
+    )
+    stripped_text = text[len(prompt) :].strip() if text.startswith(prompt) else text
     if not include_prompt:
-        return text[len(prompt) :].strip() if text.startswith(prompt) else text
+        return stripped_text
     return (
-        f"Human: {prompt} Assistant:"
-        f" {text[len(prompt):].strip() if text.startswith(prompt) else text}"
+        f"Human: {stripped_prompt} Assistant: {stripped_text}"
         if add_human_assistant_format
-        else (
-            f"{prompt}{text[len(prompt):].strip() if text.startswith(prompt) else text}"
-        )
+        else f"{stripped_prompt}{stripped_text}"
     )
 
 
@@ -105,7 +108,8 @@ def main():
     scores = []
     for i in tqdm(range(0, len(texts), args.batch_size)):
         batch = texts[i : i + args.batch_size]
-        print(f"Batch example: {batch[:3]}")
+        if i % 50 * args.batch_size == 0:
+            print(f"Batch example: {batch[0]}")
 
         inputs = tokenizer(
             batch,
