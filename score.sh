@@ -2,8 +2,9 @@
 set -euxo pipefail
 
 file_paths=(
-    # "ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt100_numgenerations10_ancestral_t1.5_humanassistant.csv"
-    "ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt100_numgenerations10_ancestral_t2.0_humanassistant.csv"
+"ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt1000_numgenerations2_top_k640_t1.0_humanassistant.csv"
+"ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt1000_numgenerations2_top_k640_t1.5_humanassistant.csv"
+"ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt1000_numgenerations2_top_k640_t2.0_humanassistant.csv"
 )
 
 for file_path in "${file_paths[@]}"

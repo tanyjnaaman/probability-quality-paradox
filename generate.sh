@@ -7,8 +7,8 @@ prompt_selection_seed=42
 num_prompts=1000
 num_generations_per_prompt=2
 batch_size=2
-device="cuda:0"
-sampling_type="ancestral"
+device="cuda:1"
+sampling_type="top_k640"
 sampling_temperatures=(2.0 1.5)
 
 for sampling_temperature in "${sampling_temperatures[@]}"

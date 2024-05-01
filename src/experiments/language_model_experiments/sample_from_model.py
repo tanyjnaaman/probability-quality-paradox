@@ -80,18 +80,23 @@ def main():
 
     # Construct prompts
     dataset = load_dataset("Anthropic/hh-rlhf")["test"]
-    sampled_dataset = dataset.shuffle(seed=args.prompt_selection_seed).select(
-        range(args.num_prompts)
+    prompts = (
+        dataset.map(
+            lambda pair: {
+                "prompt": (
+                    pair["chosen"].split("\n\n")[1].lstrip("Human:").strip()
+                    if not args.human_assistant_format
+                    else pair["chosen"].split("\n\n")[1].strip() + "\n\nAssistant:"
+                )
+            }
+        )
+        .filter(lambda row: len(row["prompt"]) < args.max_length)
+        .shuffle(seed=args.prompt_selection_seed)
+        .select(range(args.num_prompts))
     )
-    prompts = sampled_dataset.map(
-        lambda pair: {
-            "prompt": (
-                pair["chosen"].split("\n\n")[1].lstrip("Human:").strip()
-                if not args.human_assistant_format
-                else pair["chosen"].split("\n\n")[1].strip() + "\n\nAssistant:"
-            )
-        }
-    )
+    assert (
+        len(prompts) == args.num_prompts
+    ), f"Expected {args.num_prompts} prompts, got {len(prompts)}"
     print(f"Example prompts: {prompts['prompt'][:3]}")
 
     # Load model
@@ -114,7 +119,8 @@ def main():
             eos_token_id=tokenizer.eos_token_id,
             max_length=args.max_length,
             truncation=True,
-            top_p=0.95,
+            top_p=0.95 if args.sampling_type == "top_p095" else 1.0,
+            top_k=640 if args.sampling_type == "top_k640" else 0,
             temperature=args.sampling_temperature,
             batch_size=args.batch_size,
         )
