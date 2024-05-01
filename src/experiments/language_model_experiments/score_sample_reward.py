@@ -4,6 +4,9 @@ from tqdm import tqdm
 from transformers import AutoTokenizer  # type: ignore
 from pydantic import BaseModel, Field
 from pydantic_argparse import ArgumentParser
+from src.experiments.language_model_experiments.utils.prompt_text_processing import (
+    transform_prompt_and_text,
+)
 from src.packages.safe_rlhf import AutoModelForScore
 import pandas as pd
 import torch
@@ -54,25 +57,6 @@ class ScriptArguments(BaseModel):
         True,
         title="Include Prompt",
         description="Whether to include the prompt in the text",
-    )
-
-
-def transform_prompt_and_text(
-    prompt: str, text: str, add_human_assistant_format: bool, include_prompt: bool
-) -> str:
-    assert (not include_prompt and not add_human_assistant_format) or include_prompt
-    stripped_prompt = (
-        prompt[len("Human: ") :][: -len("Assistant:")]
-        if ("Human:" in prompt and "Assistant" in prompt)
-        else prompt
-    )
-    stripped_text = text[len(prompt) :].strip() if text.startswith(prompt) else text
-    if not include_prompt:
-        return stripped_text
-    return (
-        f"Human: {stripped_prompt} Assistant: {stripped_text}"
-        if add_human_assistant_format
-        else f"{stripped_prompt}{stripped_text}"
     )
 
 

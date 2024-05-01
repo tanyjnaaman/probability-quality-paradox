@@ -1,13 +1,18 @@
 from typing import List, Optional
 from typing_extensions import Literal
-from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM  # type: ignore
 from pydantic import BaseModel, Field
 from pydantic_argparse import ArgumentParser
-from torch.nn import CrossEntropyLoss
 
 import pandas as pd
-import torch
+
+from src.experiments.language_model_experiments.utils.prompt_text_processing import (
+    transform_prompt_and_text,
+)
+from src.experiments.language_model_experiments.utils.compute_nll import (
+    compute_nll,
+    compute_nll_with_decoding_algorithms,
+)
 
 
 class ScriptArguments(BaseModel):
@@ -61,24 +66,17 @@ class ScriptArguments(BaseModel):
         title="Include Prompt",
         description="Whether to include the prompt in the text",
     )
-
-
-def transform_prompt_and_text(
-    prompt: str, text: str, add_human_assistant_format: bool, include_prompt: bool
-) -> str:
-    assert (not include_prompt and not add_human_assistant_format) or include_prompt
-    stripped_prompt = (
-        prompt[len("Human: ") :][: -len("Assistant:")]
-        if ("Human:" in prompt and "Assistant" in prompt)
-        else prompt
+    sampling_type: Literal[
+        "top_p095", "top_p090", "top_k50", "top_k640", "ancestral_strict", "ancestral"
+    ] = Field(
+        "ancestral_strict",
+        title="Sampling Type",
+        description="The sampling type to use for scoring negative log likelihoods",
     )
-    stripped_text = text[len(prompt) :].strip() if text.startswith(prompt) else text
-    if not include_prompt:
-        return stripped_text
-    return (
-        f"Human: {stripped_prompt} Assistant: {stripped_text}"
-        if add_human_assistant_format
-        else f"{stripped_prompt}{stripped_text}"
+    sampling_temperature: float = Field(
+        1.0,
+        title="Sampling Temperature",
+        description="The temperature to use for scoring negative log likelihoods",
     )
 
 
@@ -109,91 +107,27 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.language_model)
 
     # Compute negative log likelihoods
-    # NOTE: lifted from https://github.com/huggingface/evaluate/blob/main/metrics/perplexity/perplexity.py
-    # if batch_size > 1 (which generally leads to padding being required), and
-    # if there is not an already assigned pad_token, assign an existing
-    # special token to also be the padding token
-    if tokenizer.pad_token is None:
-        existing_special_tokens = list(tokenizer.special_tokens_map_extended.values())
-        # check that the model already has at least one special token defined
-        assert len(existing_special_tokens) > 0, (
-            "If batch_size > 1, model must have at least one special token to use for"
-            " padding. Please use a different model or set batch_size=1."
-        )
-        # assign one of the special tokens to also be the pad token
-        tokenizer.add_special_tokens({"pad_token": existing_special_tokens[0]})
-
-    if args.add_start_token and args.max_length:
-        # leave room for <BOS> token to be added:
-        assert tokenizer.bos_token is not None, (
-            "Input model must already have a BOS token if using add_start_token=True."
-            " Please use a different model, or set add_start_token=False"
-        )
-        max_tokenized_len = args.max_length - 1
-    else:
-        max_tokenized_len = args.max_length
-
-    # Batch wise tokenization and scoring
-    nlls = []
-    for i in tqdm(range(0, len(texts), args.batch_size)):
-        batch = texts[i : i + args.batch_size]
-        if i % 50 * args.batch_size == 0:
-            print(f"Batch example: {batch[0]}")
-        inputs = tokenizer(
-            batch,
-            add_special_tokens=False,
-            padding=True,
-            truncation=True if max_tokenized_len else False,
-            max_length=max_tokenized_len,
-            return_tensors="pt",
-            return_attention_mask=True,
-        )
-
-        encoded_batch = inputs["input_ids"]
-        attn_mask = inputs["attention_mask"]
-
-        # check that each input is long enough:
-        if args.add_start_token:
-            assert torch.all(
-                torch.ge(attn_mask.sum(1), 1)
-            ), "Each input text must be at least one token long."
-        else:
-            assert torch.all(torch.ge(attn_mask.sum(1), 2)), (
-                "When add_start_token=False, each input text must be at least two"
-                " tokens long. Run with add_start_token=True if inputting strings of"
-                " only one token, and remove all empty input strings."
-            )
-
-        loss_fct = CrossEntropyLoss(reduction="none")
-
-        if args.add_start_token:
-            bos_tokens_tensor = torch.tensor(
-                [[tokenizer.bos_token_id]] * encoded_batch.size(dim=0)
-            )
-            encoded_batch = torch.cat([bos_tokens_tensor, encoded_batch], dim=1)
-            attn_mask = torch.cat(
-                [
-                    torch.ones(bos_tokens_tensor.size(), dtype=torch.int64),
-                    attn_mask,
-                ],
-                dim=1,
-            )
-
-        labels = encoded_batch
-
-        with torch.no_grad():
-            out_logits = model(encoded_batch, attention_mask=attn_mask).logits
-
-        shift_logits = out_logits[..., :-1, :].contiguous()
-        shift_labels = labels[..., 1:].contiguous()
-        shift_attention_mask_batch = attn_mask[..., 1:].contiguous()
-
-        nll_batch = (
-            loss_fct(shift_logits.transpose(1, 2), shift_labels)
-            * shift_attention_mask_batch
-        ).sum(dim=1)
-
-        nlls += nll_batch.tolist()
+    kwargs = dict(
+        top_k=50,  # huggingface default when you don't set anything
+        temperature=args.sampling_temperature,
+    )
+    if args.sampling_type == "top_p095":
+        kwargs["top_p"] = 0.95
+    elif args.sampling_type == "top_p090":
+        kwargs["top_p"] = 0.90
+    elif args.sampling_type == "top_k640":
+        kwargs["top_k"] = 640
+    elif args.sampling_type in {"top_k50", "ancestral"}:
+        kwargs["top_k"] = 50
+    nlls = compute_nll_with_decoding_algorithms(
+        texts=texts,
+        model=model,
+        tokenizer=tokenizer,
+        add_start_token=args.add_start_token,
+        max_length=args.max_length,
+        batch_size=args.batch_size,
+        **kwargs,
+    )
 
     # Save
     df["negative_log_probability"] = nlls
