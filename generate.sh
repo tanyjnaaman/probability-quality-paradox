@@ -8,11 +8,11 @@ prompt_selection_seed=42
 num_prompts=1000
 num_generations_per_prompt=2
 batch_size=2
-device="cuda:1"
-sampling_type="top_p095"
+device="cuda:0"
+sampling_type="ancestral_strict"
 sampling_temperatures=(1.0)
 prompt_start_idx=0
-prompt_dataset_split="test"
+prompt_dataset_split="train"
 
 for sampling_temperature in "${sampling_temperatures[@]}"
 do
