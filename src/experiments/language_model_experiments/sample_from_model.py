@@ -135,7 +135,7 @@ def main():
     elif args.sampling_type == "top_k50":
         sampling_kwargs["top_k"] = 50
     elif args.sampling_type == "ancestral_strict":
-        sampling_kwargs["top_p"] = 0.999
+        sampling_kwargs["top_p"] = 0.99
         sampling_kwargs["top_k"] = 0
 
     print(f"Sampling type: {args.sampling_type}, sampling kwargs: {sampling_kwargs}")
