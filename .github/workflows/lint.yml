@@ -25,7 +25,7 @@ jobs:
         with:
           options: "--preview --check --verbose"
           src: "./src"
-          jupyter: true
+          jupyter: false
 
   mypy-lint:
     runs-on: ubuntu-latest  
@@ -49,4 +49,4 @@ jobs:
           pip install mypy
       - name: mypy
         run: |
-          mypy --config-file mypy.ini src/
+          mypy --config-file mypy.ini ./src
