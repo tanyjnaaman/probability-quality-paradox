@@ -1,0 +1,29 @@
+name: lint-and-format
+
+on: [pull_request]
+
+jobs:
+  flake8-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@v3
+      - name: Set up Python environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: flake8 Lint
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8
+          flake8 ./src 
+  black-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: psf/black@stable
+        with:
+          options: "--preview --check --verbose"
+          src: "./src"
+          jupyter: false
+

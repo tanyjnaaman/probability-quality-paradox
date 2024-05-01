@@ -1,0 +1,7 @@
+# data files
+*.csv
+backup/
+
+# cache
+__pycache__/
+.mypy_cache/
