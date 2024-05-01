@@ -22,6 +22,11 @@ class ScriptArguments(BaseModel):
         title="Max Length",
         description="The maximum length of the generated text",
     )
+    prompt_dataset_split: Literal["train", "test"] = Field(
+        "test",
+        title="Prompt Dataset Split",
+        description="The dataset split to use for prompts",
+    )
     prompt_selection_seed: int = Field(
         42,
         title="Prompt Selection Seed",
@@ -36,6 +41,14 @@ class ScriptArguments(BaseModel):
         10,
         title="Number of Generations per Prompt",
         description="The number of generations to generate per prompt",
+    )
+    prompt_start_idx: int = Field(
+        0,
+        title="Prompt Start Index",
+        description=(
+            "The index to start selecting prompts from. This can be used to prevent"
+            " overlapping prompts."
+        ),
     )
     batch_size: int = Field(
         1,
@@ -52,7 +65,9 @@ class ScriptArguments(BaseModel):
         title="Device",
         description="The device to use for generation",
     )
-    sampling_type: Literal["top_p095", "ancestral", "top_k640"] = Field(
+    sampling_type: Literal[
+        "top_p095", "top_p090", "top_k50", "top_k640", "ancestral_strict", "ancestral"
+    ] = Field(
         "top_p095",
         title="Sampling Type",
         description="The sampling type to use for generation",
@@ -79,7 +94,7 @@ def main():
     args = parser.parse_typed_args()
 
     # Construct prompts
-    dataset = load_dataset("Anthropic/hh-rlhf")["test"]
+    dataset = load_dataset("Anthropic/hh-rlhf")[args.prompt_dataset_split]
     prompts = (
         dataset.map(
             lambda pair: {
@@ -92,7 +107,7 @@ def main():
         )
         .filter(lambda row: len(row["prompt"]) < args.max_length)
         .shuffle(seed=args.prompt_selection_seed)
-        .select(range(args.num_prompts))
+        .select(range(args.prompt_start_idx, args.prompt_start_idx + args.num_prompts))
     )
     assert (
         len(prompts) == args.num_prompts
@@ -110,6 +125,20 @@ def main():
 
     # Generate
     outputs: Dict[str, List[str]] = dict(prompt=[], generated_text=[])
+    sampling_kwargs = dict()
+    if args.sampling_type == "top_p095":
+        sampling_kwargs["top_p"] = 0.95
+    elif args.sampling_type == "top_p090":
+        sampling_kwargs["top_p"] = 0.90
+    elif args.sampling_type == "top_k640":
+        sampling_kwargs["top_k"] = 640
+    elif args.sampling_type == "top_k50":
+        sampling_kwargs["top_k"] = 50
+    elif args.sampling_type == "ancestral_strict":
+        sampling_kwargs["top_p"] = 1.0
+        sampling_kwargs["top_k"] = 0
+
+    print(f"Sampling type: {args.sampling_type}, sampling kwargs: {sampling_kwargs}")
     for row in tqdm(prompts):
         batched_prompts = [row["prompt"]] * args.num_generations_per_prompt
         sequences = pipeline(
@@ -119,8 +148,7 @@ def main():
             eos_token_id=tokenizer.eos_token_id,
             max_length=args.max_length,
             truncation=True,
-            top_p=0.95 if args.sampling_type == "top_p095" else 1.0,
-            top_k=640 if args.sampling_type == "top_k640" else 0,
+            **sampling_kwargs,
             temperature=args.sampling_temperature,
             batch_size=args.batch_size,
         )
@@ -136,7 +164,7 @@ def main():
     # Save outputs
     save_path = (
         args.save_path
-        or f"{args.model.replace('/', '-')}_l{args.max_length}_promptseed{args.prompt_selection_seed}_numprompt{args.num_prompts}_numgenerations{args.num_generations_per_prompt}_{args.sampling_type}_t{args.sampling_temperature}{'_humanassistant' if args.human_assistant_format else ''}.csv"
+        or f"{args.model.replace('/', '-')}_l{args.max_length}_promptsplit{args.prompt_dataset_split}_promptseed{args.prompt_selection_seed}_numprompt{args.num_prompts}_numgenerations{args.num_generations_per_prompt}_promptstart{args.prompt_start_idx}_{args.sampling_type}_t{args.sampling_temperature}{'_humanassistant' if args.human_assistant_format else ''}.csv"
     )
     assert save_path.endswith(".csv"), "Save path must be a .csv file"
     outputs_as_df = pd.DataFrame.from_dict(outputs)
