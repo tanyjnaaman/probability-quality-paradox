@@ -6,7 +6,6 @@ from transformers.generation.logits_process import (  # type: ignore
     TemperatureLogitsWarper,
     TopKLogitsWarper,
     TopPLogitsWarper,
-    LogitNormalization,
 )
 from torch.nn import CrossEntropyLoss
 
@@ -119,9 +118,7 @@ def compute_nll_with_decoding_algorithms(
     top_k: int = 0,
     top_p: float = 1.0,
     temperature: float = 1.0,
-    renormalize_logits: bool = False,
 ) -> List[float]:
-    # NOTE: warpers logic lifted from https://github.com/huggingface/transformers/blob/v4.40.1/src/transformers/generation/utils.py#L711
     # instantiate warpers list
     warpers = LogitsProcessorList()
     min_tokens_to_keep = 1
@@ -135,10 +132,6 @@ def compute_nll_with_decoding_algorithms(
         warpers.append(
             TopPLogitsWarper(top_p=top_p, min_tokens_to_keep=min_tokens_to_keep)
         )
-
-    # `LogitNormalization` should always be the last logit processor, when present
-    if renormalize_logits is True:
-        warpers.append(LogitNormalization())
 
     return _compute_nll_with_logitswarper(
         texts=texts,
@@ -160,7 +153,13 @@ def _compute_nll_with_logitswarper(
     batch_size: int,
     logits_warpers: LogitsProcessorList,
 ) -> List[float]:
-    # NOTE: lifted from https://github.com/huggingface/evaluate/blob/main/metrics/perplexity/perplexity.py
+    """
+    NOTE: lifted from https://github.com/huggingface/evaluate/blob/main/metrics/perplexity/perplexity.py
+    NOTE: warpers logic lifted from https://github.com/huggingface/transformers/blob/v4.40.1/src/transformers/generation/utils.py#L711
+
+    Note that we would have 0 log probability under some decoding method if topk/whatever method removes the correct next token.
+    This is unlikely if you are scoring texts with the same model and decoding method used to generate the text.
+    """
 
     # 1. Set up tokenizer
     # if batch_size > 1 (which generally leads to padding being required), and
@@ -238,7 +237,17 @@ def _compute_nll_with_logitswarper(
             out_logits = model(encoded_batch, attention_mask=attn_mask).logits
 
         shift_logits = out_logits[..., :-1, :].contiguous()
-        shift_warped_logits = logits_warpers(encoded_batch, shift_logits)
+        shift_warped_logits = torch.cat(
+            [shift_logits[:, 0, :].unsqueeze(dim=1)]
+            + [
+                logits_warpers(encoded_batch, shift_logits[:, i, :]).unsqueeze(dim=1)
+                for i in range(
+                    1, shift_logits.shape[1]
+                )  # we don't warp the first token
+            ],
+            dim=1,
+        )
+
         shift_labels = labels[..., 1:].contiguous()
         shift_attention_mask_batch = attn_mask[..., 1:].contiguous()
 

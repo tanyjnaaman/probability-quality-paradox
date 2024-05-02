@@ -115,13 +115,15 @@ def main():
     pipeline = transformers.pipeline(
         "text-generation",
         model=args.model,
-        torch_dtype=torch.float16,
+        torch_dtype=torch.float32,
         device_map=args.device,
+        model_kwargs={
+            "load_in_8bit": args.model == "meta-llama/Llama-2-7b-hf"
+        },  # NOTE: This is a hack to get around the fact that the model tends to break with float16
     )
     if not (tokenizer.pad_token):
         print("Adding pad token to tokenizer")
         pipeline.tokenizer.add_special_tokens({"pad_token": "[PAD]"})  # type: ignore
-        pipeline.tokenizer.padding_side = "left"  # type: ignore
 
     # Generate
     outputs: Dict[str, List[str]] = dict(prompt=[], generated_text=[])
@@ -135,7 +137,7 @@ def main():
     elif args.sampling_type == "top_k50":
         sampling_kwargs["top_k"] = 50
     elif args.sampling_type == "ancestral_strict":
-        sampling_kwargs["top_p"] = 0.99
+        sampling_kwargs["top_p"] = 1.0
         sampling_kwargs["top_k"] = 0
 
     print(f"Sampling type: {args.sampling_type}, sampling kwargs: {sampling_kwargs}")

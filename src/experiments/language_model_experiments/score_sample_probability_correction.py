@@ -11,12 +11,12 @@ from src.experiments.language_model_experiments.utils.prompt_text_processing imp
 )
 from src.experiments.language_model_experiments.utils.compute_nll import (
     compute_nll,
+    compute_nll_with_decoding_algorithms,
 )
 
 
 class ScriptArguments(BaseModel):
     language_model: str = Field(
-        "meta-llama/Llama-2-7b-hf",
         title="Reward Model",
         description="The HF model to use to score string negative log likelihoods",
     )
@@ -65,6 +65,21 @@ class ScriptArguments(BaseModel):
         title="Include Prompt",
         description="Whether to include the prompt in the text",
     )
+    sampling_type: Literal[
+        "top_p095",
+        "top_p090",
+        "top_k50",
+        "top_k640",
+        "ancestral_strict",
+        "ancestral",
+    ] = Field(
+        title="Sampling Type",
+        description="The sampling type to use for scoring negative log likelihoods",
+    )
+    sampling_temperature: float = Field(
+        title="Sampling Temperature",
+        description="The temperature to use for scoring negative log likelihoods",
+    )
 
 
 def main():
@@ -94,6 +109,27 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.language_model)
 
     # Compute negative log likelihoods
+    kwargs = dict(
+        top_k=50,  # huggingface default when you don't set anything
+        temperature=args.sampling_temperature,
+    )
+    if args.sampling_type == "top_p095":
+        kwargs["top_p"] = 0.95
+    elif args.sampling_type == "top_p090":
+        kwargs["top_p"] = 0.90
+    elif args.sampling_type == "top_k640":
+        kwargs["top_k"] = 640
+    elif args.sampling_type in {"top_k50", "ancestral"}:
+        kwargs["top_k"] = 50
+    biased_nlls = compute_nll_with_decoding_algorithms(
+        texts=texts,
+        model=model,
+        tokenizer=tokenizer,
+        add_start_token=args.add_start_token,
+        max_length=args.max_length,
+        batch_size=args.batch_size,
+        **kwargs,
+    )
     nlls = compute_nll(
         texts=texts,
         model=model,
@@ -104,8 +140,9 @@ def main():
     )
 
     # Save
-    df["negative_log_probability"] = nlls
-    df["negative_log_probability_text"] = texts
+    df["original_negative_log_probability"] = nlls
+    df["samplingbiased_negative_log_probability"] = biased_nlls
+    df["nll_correction_texts"] = texts
     if not args.save_path:
         print(
             "No save path provided. Saving to the input file with '_scorednll'"
@@ -114,7 +151,7 @@ def main():
         # TODO: clean up naming
         args.save_path = args.csv_file_path.replace(
             ".csv",
-            f"_scorednll{'_' + str(args.sampling_temperature) if args.sampling_temperature is not None else ''}{'_humanassistant' if args.add_human_assistant_format else ''}{'_includeprompt' if args.include_prompt else ''}.csv",
+            f"_scorednllcorrection{'_' + args.sampling_type if args.sampling_type is not None else ''}{'_' + str(args.sampling_temperature) if args.sampling_temperature is not None else ''}{'_humanassistant' if args.add_human_assistant_format else ''}{'_includeprompt' if args.include_prompt else ''}.csv",
         )
     df.to_csv(args.save_path, index=False)
 
