@@ -1,6 +1,6 @@
-from typing_extensions import Literal
 import pytest
-
+import psutil  # type: ignore
+from typing_extensions import Literal
 from transformers import AutoTokenizer, AutoModelForCausalLM  # type: ignore
 
 from src.experiments.language_model_experiments.utils.compute_nll import (
@@ -9,7 +9,12 @@ from src.experiments.language_model_experiments.utils.compute_nll import (
 )
 
 _DEVICE = "cpu"
-_MODEL = "ethz-spylab/rlhf-7b-harmless"
+_MODEL = (
+    "ethz-spylab/rlhf-7b-harmless"
+    if psutil.virtual_memory().total > 32e9
+    else "openai-community/gpt2"
+)
+print(f"Using model: {_MODEL}")
 
 
 def test_compute_nll() -> None:
