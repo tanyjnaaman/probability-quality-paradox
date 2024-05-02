@@ -36,9 +36,21 @@ temperatures=(
 )
 
 
-for file_path in "${file_paths[@]}"
+for i in "${!file_paths[@]}"
 do
-    echo "Scoring $file_path"
 
-    # TODO
+    file_path=${file_paths[$i]}
+    sampling_type=${sampling_types[$i]}
+    temperature=${temperatures[$i]}
+
+    echo "Scoring $file_path"
+    # with human assistant format for reward model
+    python -m src.experiments.language_model_experiments.score_sample_reward --csv-file-path $file_path --batch-size 16 --add-human-assistant-format
+    
+    # only generated text for probability
+    python -m src.experiments.language_model_experiments.score_sample_probability --csv-file-path $file_path --batch-size 16 --no-include-prompt
+
+    # with human assistant format for probability under generation model (for correction)
+    python -m src.experiments.language_model_experiments.score_sample_probability_correction --csv-file-path $file_path --batch-size 16 --add-human-assistant-format --sampling-type $sampling_type --temperature $temperature
+
 done
