@@ -1,4 +1,5 @@
 from typing import List, Optional
+import torch
 from typing_extensions import Literal
 from transformers import AutoTokenizer, AutoModelForCausalLM  # type: ignore
 from pydantic import BaseModel, Field
@@ -99,8 +100,14 @@ def main():
     print(f"Examples: {texts[:3]}")
 
     # Load the language model
-    model = AutoModelForCausalLM.from_pretrained(
-        args.language_model, device_map=args.device
+    assert torch.cuda.is_available(), "CUDA must be available" or args.device == "cpu"
+    assert (
+        torch.cuda.device_count() > 1 or args.device == "cuda:0" or args.device == "cpu"
+    )
+    model = (
+        AutoModelForCausalLM.from_pretrained(args.language_model, device_map="auto")
+        if args.device == "auto"
+        else AutoModelForCausalLM.from_pretrained(args.language_model).to(args.device)
     )
     tokenizer = AutoTokenizer.from_pretrained(args.language_model)
 
@@ -117,7 +124,6 @@ def main():
         if not args.condition_on_prompt
         else compute_nll_with_decoding_algorithms(
             texts=texts,
-            prompts=prompts,
             model=model,
             tokenizer=tokenizer,
             add_start_token=args.add_start_token,
