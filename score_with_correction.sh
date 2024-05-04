@@ -45,12 +45,12 @@ do
 
     echo "Scoring $file_path"
     # with human assistant format for reward model
-    python -m src.experiments.language_model_experiments.score_sample_reward --csv-file-path $file_path --batch-size 16 --add-human-assistant-format
+    # python -m src.experiments.language_model_experiments.score_sample_reward --csv-file-path $file_path --batch-size 16 --add-human-assistant-format
     
     # only generated text for probability
-    python -m src.experiments.language_model_experiments.score_sample_probability --csv-file-path $file_path --batch-size 16 --no-include-prompt
+    # python -m src.experiments.language_model_experiments.score_sample_probability --csv-file-path $file_path --batch-size 16 --no-include-prompt
 
     # with human assistant format for probability under generation model (for correction)
-    python -m src.experiments.language_model_experiments.score_sample_probability_correction --csv-file-path $file_path --batch-size 16 --add-human-assistant-format --sampling-type $sampling_type --temperature $temperature
+    python -m src.experiments.language_model_experiments.score_sample_probability_correction --csv-file-path $file_path --batch-size 16 --add-human-assistant-format --sampling-type $sampling_type --language-model "ethz-spylab/rlhf-7b-harmless" --sampling-temperature $temperature
 
 done

@@ -7,17 +7,19 @@ from pydantic_argparse import ArgumentParser
 import pandas as pd
 
 from src.experiments.language_model_experiments.utils.prompt_text_processing import (
+    transform_prompt,
     transform_prompt_and_text,
 )
 from src.experiments.language_model_experiments.utils.compute_nll import (
     compute_nll,
+    compute_nll_with_decoding_algorithms,
 )
 
 
 class ScriptArguments(BaseModel):
     language_model: str = Field(
         "meta-llama/Llama-2-7b-hf",
-        title="Reward Model",
+        title="Model",
         description="The HF model to use to score string negative log likelihoods",
     )
     max_length: int = Field(
@@ -65,6 +67,11 @@ class ScriptArguments(BaseModel):
         title="Include Prompt",
         description="Whether to include the prompt in the text",
     )
+    condition_on_prompt: bool = Field(
+        False,
+        title="Condition on Prompts",
+        description="Whether to condition on prompts",
+    )
 
 
 def main():
@@ -78,12 +85,16 @@ def main():
     print(df.head())
     print(df.shape)
     raw_texts: List[str] = df["generated_text"].tolist()
-    prompts: List[str] = df["prompt"].tolist()
+    raw_prompts: List[str] = df["prompt"].tolist()
     texts = [
         transform_prompt_and_text(
             prompt, text, args.add_human_assistant_format, args.include_prompt
         )
-        for prompt, text in zip(prompts, raw_texts)
+        for prompt, text in zip(raw_prompts, raw_texts)
+    ]
+    prompts = [
+        transform_prompt(prompt, args.add_human_assistant_format)
+        for prompt in raw_prompts
     ]
     print(f"Examples: {texts[:3]}")
 
@@ -94,13 +105,29 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.language_model)
 
     # Compute negative log likelihoods
-    nlls = compute_nll(
-        texts=texts,
-        model=model,
-        tokenizer=tokenizer,
-        add_start_token=args.add_start_token,
-        max_length=args.max_length,
-        batch_size=args.batch_size,
+    nlls = (
+        compute_nll(
+            texts=texts,
+            model=model,
+            tokenizer=tokenizer,
+            add_start_token=args.add_start_token,
+            max_length=args.max_length,
+            batch_size=args.batch_size,
+        )
+        if not args.condition_on_prompt
+        else compute_nll_with_decoding_algorithms(
+            texts=texts,
+            prompts=prompts,
+            model=model,
+            tokenizer=tokenizer,
+            add_start_token=args.add_start_token,
+            max_length=args.max_length,
+            batch_size=args.batch_size,
+            condition_on_prompts=prompts,
+            top_k=0,
+            top_p=1.0,
+            temperature=1.0,
+        )
     )
 
     # Save
@@ -114,7 +141,7 @@ def main():
         # TODO: clean up naming
         args.save_path = args.csv_file_path.replace(
             ".csv",
-            f"_scorednll{'_' + str(args.sampling_temperature) if args.sampling_temperature is not None else ''}{'_humanassistant' if args.add_human_assistant_format else ''}{'_includeprompt' if args.include_prompt else ''}.csv",
+            f"_scorednll{'_humanassistant' if args.add_human_assistant_format else ''}{'_includeprompt' if args.include_prompt else ''}{'_conditioned' if args.condition_on_prompt else ''}.csv",
         )
     df.to_csv(args.save_path, index=False)
 

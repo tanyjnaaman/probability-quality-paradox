@@ -115,6 +115,7 @@ def compute_nll_with_decoding_algorithms(
     add_start_token: bool,
     max_length: int,
     batch_size: int,
+    condition_on_prompts: Optional[List[str]] = None,
     top_k: int = 0,
     top_p: float = 1.0,
     temperature: float = 1.0,
@@ -140,6 +141,7 @@ def compute_nll_with_decoding_algorithms(
         add_start_token=add_start_token,
         max_length=max_length,
         batch_size=batch_size,
+        condition_on_prompts=condition_on_prompts,
         logits_warpers=warpers,
     )
 
@@ -152,6 +154,8 @@ def _compute_nll_with_logitswarper(
     max_length: int,
     batch_size: int,
     logits_warpers: LogitsProcessorList,
+    add_special_tokens: bool = False,
+    condition_on_prompts: Optional[List[str]] = None,  # TODO: carve out prompt
 ) -> List[float]:
     """
     NOTE: lifted from https://github.com/huggingface/evaluate/blob/main/metrics/perplexity/perplexity.py
@@ -160,6 +164,16 @@ def _compute_nll_with_logitswarper(
     Note that we would have 0 log probability under some decoding method if topk/whatever method removes the correct next token.
     This is unlikely if you are scoring texts with the same model and decoding method used to generate the text.
     """
+
+    # 0. validation
+    if condition_on_prompts is not None:
+        assert len(texts) == len(condition_on_prompts), (
+            f"Number of texts ({len(texts)}) != number of prompts"
+            f" ({len(condition_on_prompts)})."
+        )
+        assert all(
+            text.startswith(prompt) for text, prompt in zip(texts, condition_on_prompts)
+        ), "All texts must start with their respective prompts."
 
     # 1. Set up tokenizer
     # if batch_size > 1 (which generally leads to padding being required), and
@@ -185,6 +199,19 @@ def _compute_nll_with_logitswarper(
     else:
         max_tokenized_len = max_length
 
+    # 2. tokenize prompts (if needed)
+    if condition_on_prompts is not None:
+        encoded_prompts = tokenizer(
+            condition_on_prompts,
+            add_special_tokens=add_special_tokens,
+            padding=False,
+            truncation=True if max_tokenized_len else False,
+            max_length=max_tokenized_len,
+        )["input_ids"]
+        prompt_lengths = [len(encoded_prompt) for encoded_prompt in encoded_prompts]
+    else:
+        prompt_lengths = [0] * len(texts)
+
     # 3. Batch wise tokenization and scoring
     nlls = []
     for i in tqdm(range(0, len(texts), batch_size)):
@@ -193,7 +220,7 @@ def _compute_nll_with_logitswarper(
             print(f"Batch example: {batch[0]}")
         inputs = tokenizer(
             batch,
-            add_special_tokens=False,
+            add_special_tokens=add_special_tokens,
             padding=True,
             truncation=True if max_tokenized_len else False,
             max_length=max_tokenized_len,
@@ -216,8 +243,6 @@ def _compute_nll_with_logitswarper(
                 " only one token, and remove all empty input strings."
             )
 
-        loss_fct = CrossEntropyLoss(reduction="none")
-
         if add_start_token:
             bos_tokens_tensor = torch.tensor(
                 [[tokenizer.bos_token_id]] * encoded_batch.size(dim=0)
@@ -233,9 +258,11 @@ def _compute_nll_with_logitswarper(
 
         labels = encoded_batch
 
+        # 3.2 compute logits
         with torch.no_grad():
             out_logits = model(encoded_batch, attention_mask=attn_mask).logits
 
+        # 3.3 shift logits and apply warpers
         shift_logits = out_logits[..., :-1, :].contiguous()
         shift_warped_logits = torch.cat(
             [shift_logits[:, 0, :].unsqueeze(dim=1)]
@@ -247,14 +274,20 @@ def _compute_nll_with_logitswarper(
             ],
             dim=1,
         )
-
         shift_labels = labels[..., 1:].contiguous()
         shift_attention_mask_batch = attn_mask[..., 1:].contiguous()
 
-        nll_batch = (
-            loss_fct(shift_warped_logits.transpose(1, 2), shift_labels)
+        # 3.4 compute (conditional) nll
+        nlls_not_summed = (
+            CrossEntropyLoss(reduction="none")(
+                shift_warped_logits.transpose(1, 2), shift_labels
+            )
             * shift_attention_mask_batch
-        ).sum(dim=1)
+        )
+        # zero out the nlls for the prompt
+        for i, prompt_length in enumerate(prompt_lengths):
+            nlls_not_summed[i, :prompt_length] = 0.0
+        nll_batch = nlls_not_summed.sum(dim=1)
 
         nlls += nll_batch.tolist()
     return nlls

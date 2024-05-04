@@ -7,6 +7,7 @@ from pydantic_argparse import ArgumentParser
 import pandas as pd
 
 from src.experiments.language_model_experiments.utils.prompt_text_processing import (
+    transform_prompt,
     transform_prompt_and_text,
 )
 from src.experiments.language_model_experiments.utils.compute_nll import (
@@ -17,7 +18,7 @@ from src.experiments.language_model_experiments.utils.compute_nll import (
 
 class ScriptArguments(BaseModel):
     language_model: str = Field(
-        title="Reward Model",
+        title="Model",
         description="The HF model to use to score string negative log likelihoods",
     )
     max_length: int = Field(
@@ -63,7 +64,18 @@ class ScriptArguments(BaseModel):
     include_prompt: bool = Field(
         True,
         title="Include Prompt",
-        description="Whether to include the prompt in the text",
+        description=(
+            "Whether to include the prompt in the text. If false, only the generated"
+            " text is used."
+        ),
+    )
+    condition_on_prompt: bool = Field(
+        False,
+        title="Condition on Prompt",
+        description=(
+            "Whether to condition on the prompt. Cannot be true if include_prompt is"
+            " false."
+        ),
     )
     sampling_type: Literal[
         "top_p095",
@@ -93,14 +105,20 @@ def main():
     print(df.head())
     print(df.shape)
     raw_texts: List[str] = df["generated_text"].tolist()
-    prompts: List[str] = df["prompt"].tolist()
+    raw_prompts: List[str] = df["prompt"].tolist()
     texts = [
         transform_prompt_and_text(
             prompt, text, args.add_human_assistant_format, args.include_prompt
         )
-        for prompt, text in zip(prompts, raw_texts)
+        for prompt, text in zip(raw_prompts, raw_texts)
     ]
     print(f"Examples: {texts[:3]}")
+    prompts = [
+        transform_prompt(
+            raw_prompts, args.add_human_assistant_format, args.include_prompt
+        )
+        for prompt in raw_prompts
+    ]
 
     # Load the language model
     model = AutoModelForCausalLM.from_pretrained(
@@ -110,7 +128,6 @@ def main():
 
     # Compute negative log likelihoods
     kwargs = dict(
-        top_k=50,  # huggingface default when you don't set anything
         temperature=args.sampling_temperature,
     )
     if args.sampling_type == "top_p095":
@@ -121,6 +138,11 @@ def main():
         kwargs["top_k"] = 640
     elif args.sampling_type in {"top_k50", "ancestral"}:
         kwargs["top_k"] = 50
+    elif args.sampling_type == "ancestral_strict":
+        kwargs["top_k"] = 0
+        kwargs["top_p"] = 1.0
+    else:
+        raise ValueError(f"Invalid sampling_type: {args.sampling_type}")
     biased_nlls = compute_nll_with_decoding_algorithms(
         texts=texts,
         model=model,
@@ -128,15 +150,20 @@ def main():
         add_start_token=args.add_start_token,
         max_length=args.max_length,
         batch_size=args.batch_size,
+        condition_on_prompts=prompts if args.condition_on_prompt else None,
         **kwargs,
     )
-    nlls = compute_nll(
+    nlls = compute_nll_with_decoding_algorithms(
         texts=texts,
         model=model,
         tokenizer=tokenizer,
         add_start_token=args.add_start_token,
         max_length=args.max_length,
         batch_size=args.batch_size,
+        condition_on_prompts=prompts if args.condition_on_prompt else None,
+        top_k=0,
+        top_p=1.0,
+        temperature=1.0,
     )
 
     # Save
@@ -145,13 +172,13 @@ def main():
     df["nll_correction_texts"] = texts
     if not args.save_path:
         print(
-            "No save path provided. Saving to the input file with '_scorednll'"
-            " appended."
+            "No save path provided. Saving to the input file with"
+            " '_scorednllcorrection' appended."
         )
         # TODO: clean up naming
         args.save_path = args.csv_file_path.replace(
             ".csv",
-            f"_scorednllcorrection{'_' + args.sampling_type if args.sampling_type is not None else ''}{'_' + str(args.sampling_temperature) if args.sampling_temperature is not None else ''}{'_humanassistant' if args.add_human_assistant_format else ''}{'_includeprompt' if args.include_prompt else ''}.csv",
+            f"_scorednllcorrection{'_' + args.sampling_type if args.sampling_type is not None else ''}{'_' + str(args.sampling_temperature) if args.sampling_temperature is not None else ''}{'_humanassistant' if args.add_human_assistant_format else ''}{'_includeprompt' if args.include_prompt else ''}{'_conditioned' if args.condition_on_prompt else ''}.csv",
         )
     df.to_csv(args.save_path, index=False)
 
