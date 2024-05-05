@@ -11,7 +11,6 @@ from src.experiments.language_model_experiments.utils.prompt_text_processing imp
     transform_prompt_and_text,
 )
 from src.experiments.language_model_experiments.utils.compute_nll import (
-    compute_nll,
     compute_nll_with_decoding_algorithms,
 )
 
@@ -114,9 +113,7 @@ def main():
     ]
     print(f"Examples: {texts[:3]}")
     prompts = [
-        transform_prompt(
-            raw_prompts, args.add_human_assistant_format, args.include_prompt
-        )
+        transform_prompt(prompt, args.add_human_assistant_format)
         for prompt in raw_prompts
     ]
 
@@ -178,7 +175,7 @@ def main():
         # TODO: clean up naming
         args.save_path = args.csv_file_path.replace(
             ".csv",
-            f"_scorednllcorrection{'_' + args.sampling_type if args.sampling_type is not None else ''}{'_' + str(args.sampling_temperature) if args.sampling_temperature is not None else ''}{'_humanassistant' if args.add_human_assistant_format else ''}{'_includeprompt' if args.include_prompt else ''}{'_conditioned' if args.condition_on_prompt else ''}.csv",
+            f"_scoredcorrectionnll{'_' + args.sampling_type if args.sampling_type is not None else ''}{'_' + str(args.sampling_temperature) if args.sampling_temperature is not None else ''}{'_humanassistant' if args.add_human_assistant_format else ''}{'_includeprompt' if args.include_prompt else ''}{'_conditioned' if args.condition_on_prompt else ''}.csv",
         )
     df.to_csv(args.save_path, index=False)
 

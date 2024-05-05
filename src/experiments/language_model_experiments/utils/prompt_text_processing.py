@@ -24,5 +24,7 @@ def transform_prompt(prompt: str, add_human_assistant_format: bool) -> str:
         else prompt
     )
     return (
-        f"Human: {stripped_prompt}" if add_human_assistant_format else stripped_prompt
+        f"Human: {stripped_prompt} Assistant:"
+        if add_human_assistant_format
+        else stripped_prompt
     )

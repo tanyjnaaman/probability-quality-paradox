@@ -8,7 +8,7 @@ from transformers.generation.logits_process import (  # type: ignore
     TopPLogitsWarper,
 )
 from torch.nn import CrossEntropyLoss
-
+from copy import deepcopy
 import torch
 
 
@@ -24,6 +24,7 @@ def compute_nll(
     # if batch_size > 1 (which generally leads to padding being required), and
     # if there is not an already assigned pad_token, assign an existing
     # special token to also be the padding token
+    model = model.eval()
     if tokenizer.pad_token is None:
         existing_special_tokens = list(tokenizer.special_tokens_map_extended.values())
         # check that the model already has at least one special token defined
@@ -121,6 +122,9 @@ def compute_nll_with_decoding_algorithms(
     temperature: float = 1.0,
 ) -> List[float]:
     # instantiate warpers list
+    assert top_k >= 0, f"top_k must be >= 0, got {top_k}"
+    assert 0.0 < top_p <= 1.0, f"top_p must be in (0.0, 1.0], got {top_p}"
+    assert temperature > 0.0, f"temperature must be > 0.0, got {temperature}"
     warpers = LogitsProcessorList()
     min_tokens_to_keep = 1
     if temperature is not None and temperature != 1.0:
@@ -155,7 +159,7 @@ def _compute_nll_with_logitswarper(
     batch_size: int,
     logits_warpers: LogitsProcessorList,
     add_special_tokens: bool = False,
-    condition_on_prompts: Optional[List[str]] = None,  # TODO: carve out prompt
+    condition_on_prompts: Optional[List[str]] = None,
 ) -> List[float]:
     """
     NOTE: lifted from https://github.com/huggingface/evaluate/blob/main/metrics/perplexity/perplexity.py
@@ -166,6 +170,7 @@ def _compute_nll_with_logitswarper(
     """
 
     # 0. validation
+    model = model.eval()
     if condition_on_prompts is not None:
         assert len(texts) == len(condition_on_prompts), (
             f"Number of texts ({len(texts)}) != number of prompts"
@@ -199,6 +204,10 @@ def _compute_nll_with_logitswarper(
     else:
         max_tokenized_len = max_length
 
+    # 1.1 tokenizer should be right padded
+    tokenizer = deepcopy(tokenizer)
+    tokenizer.padding_side = "right"  # type: ignore
+
     # 2. tokenize prompts (if needed)
     if condition_on_prompts is not None:
         encoded_prompts = tokenizer(
@@ -216,8 +225,10 @@ def _compute_nll_with_logitswarper(
     nlls = []
     for i in tqdm(range(0, len(texts), batch_size)):
         batch = texts[i : i + batch_size]
+        batch_prompt_lengths = prompt_lengths[i : i + batch_size]
         if i % 50 * batch_size == 0:
             print(f"Batch example: {batch[0]}")
+            print(f"Batch prompt length: {batch_prompt_lengths[0]}")
         inputs = tokenizer(
             batch,
             add_special_tokens=add_special_tokens,
@@ -284,9 +295,19 @@ def _compute_nll_with_logitswarper(
             )
             * shift_attention_mask_batch
         )
-        # zero out the nlls for the prompt
-        for i, prompt_length in enumerate(prompt_lengths):
+        nlls_not_summed = torch.nan_to_num(
+            nlls_not_summed, nan=0.0
+        )  # could have nan (padding tokens) so we zero them out
+        nlls_not_summed = torch.clamp(
+            nlls_not_summed, min=0.0, max=25
+        )  # clamp to avoid inf, ln(1e-11) ~= -25
+
+        # 3.5 zero out the nlls for the prompt
+        for i, prompt_length in enumerate(batch_prompt_lengths):
             nlls_not_summed[i, :prompt_length] = 0.0
+            assert not nlls_not_summed[i].isnan().any()
+            assert not nlls_not_summed[i].isinf().any()
+            assert not nlls_not_summed[i].sum().isinf()
         nll_batch = nlls_not_summed.sum(dim=1)
 
         nlls += nll_batch.tolist()

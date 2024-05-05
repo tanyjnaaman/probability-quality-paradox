@@ -1,15 +1,15 @@
 #!/bin/bash
 set -euxo pipefail
 
-# model="ethz-spylab/rlhf-7b-harmless" 
-model="meta-llama/Llama-2-7b-hf"
+model="ethz-spylab/rlhf-7b-harmless" 
+# model="meta-llama/Llama-2-7b-hf"
 max_length=256
 prompt_selection_seed=42
 num_prompts=1000
 num_generations_per_prompt=2
 batch_size=2
 device="cuda:0"
-sampling_type="ancestral_strict"
+sampling_type="typical"
 sampling_temperatures=(1.0)
 prompt_start_idx=0
 prompt_dataset_split="train"
