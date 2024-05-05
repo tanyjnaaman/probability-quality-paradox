@@ -8,9 +8,9 @@ prompt_selection_seed=42
 num_prompts=1000
 num_generations_per_prompt=2
 batch_size=2
-device="cuda:0"
-sampling_type="typical"
-sampling_temperatures=(1.0)
+device="cuda:1"
+sampling_type="typical_p090"
+sampling_temperatures=(1.5 2.0)
 prompt_start_idx=0
 prompt_dataset_split="train"
 
