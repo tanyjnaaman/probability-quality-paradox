@@ -11,7 +11,7 @@ from src.experiments.language_model_experiments.utils.compute_nll import (
 _DEVICE = "cpu"
 _MODEL = (
     "ethz-spylab/rlhf-7b-harmless"
-    if psutil.virtual_memory().total > 32e9 or True
+    if psutil.virtual_memory().total > 32e9
     else "openai-community/gpt2"
 )
 print(f"Using model: {_MODEL}")
