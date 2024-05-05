@@ -132,6 +132,7 @@ def main():
             condition_on_prompts=prompts,
             top_k=0,
             top_p=1.0,
+            typical_p=None,
             temperature=1.0,
         )
     )

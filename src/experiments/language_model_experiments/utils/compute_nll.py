@@ -6,6 +6,7 @@ from transformers.generation.logits_process import (  # type: ignore
     TemperatureLogitsWarper,
     TopKLogitsWarper,
     TopPLogitsWarper,
+    TypicalLogitsWarper,
 )
 from torch.nn import CrossEntropyLoss
 from copy import deepcopy
@@ -21,6 +22,10 @@ def compute_nll(
     batch_size: int,
 ) -> List[float]:
     # NOTE: lifted from https://github.com/huggingface/evaluate/blob/main/metrics/perplexity/perplexity.py
+    # tokenizer should be right padded
+    tokenizer = deepcopy(tokenizer)
+    tokenizer.padding_side = "right"  # type: ignore
+
     # if batch_size > 1 (which generally leads to padding being required), and
     # if there is not an already assigned pad_token, assign an existing
     # special token to also be the padding token
@@ -119,12 +124,16 @@ def compute_nll_with_decoding_algorithms(
     condition_on_prompts: Optional[List[str]] = None,
     top_k: int = 0,
     top_p: float = 1.0,
+    typical_p: Optional[float] = None,
     temperature: float = 1.0,
 ) -> List[float]:
     # instantiate warpers list
     assert top_k >= 0, f"top_k must be >= 0, got {top_k}"
     assert 0.0 < top_p <= 1.0, f"top_p must be in (0.0, 1.0], got {top_p}"
     assert temperature > 0.0, f"temperature must be > 0.0, got {temperature}"
+    assert (
+        typical_p is None or typical_p > 0.0
+    ), f"typical_p must be > 0.0, got {typical_p}"
     warpers = LogitsProcessorList()
     min_tokens_to_keep = 1
     if temperature is not None and temperature != 1.0:
@@ -136,6 +145,10 @@ def compute_nll_with_decoding_algorithms(
     if top_p is not None and top_p < 1.0:
         warpers.append(
             TopPLogitsWarper(top_p=top_p, min_tokens_to_keep=min_tokens_to_keep)
+        )
+    if typical_p is not None:
+        warpers.append(
+            TypicalLogitsWarper(mass=typical_p, min_tokens_to_keep=min_tokens_to_keep)
         )
 
     return _compute_nll_with_logitswarper(
