@@ -69,7 +69,7 @@ class ScriptArguments(BaseModel):
         "top_p095",
         "top_p090",
         "top_k50",
-        "top_k640",
+        "top_k30",
         "ancestral_strict",
         "ancestral",
         "typical_p090",
@@ -141,8 +141,8 @@ def main():
         sampling_kwargs["top_p"] = 0.95
     elif args.sampling_type == "top_p090":
         sampling_kwargs["top_p"] = 0.90
-    elif args.sampling_type == "top_k640":
-        sampling_kwargs["top_k"] = 640
+    elif args.sampling_type == "top_k30":
+        sampling_kwargs["top_k"] = 30
     elif args.sampling_type in {"top_k50", "ancestral"}:
         sampling_kwargs["top_k"] = 50
     elif args.sampling_type == "ancestral_strict":

@@ -11,7 +11,7 @@ from src.experiments.language_model_experiments.utils.compute_nll import (
 _DEVICE = "cpu"
 _MODEL = (
     "ethz-spylab/rlhf-7b-harmless"
-    if psutil.virtual_memory().total > 32e9
+    if psutil.virtual_memory().total > 32e9 or True
     else "openai-community/gpt2"
 )
 print(f"Using model: {_MODEL}")
@@ -54,9 +54,9 @@ def test_compute_nll() -> None:
             id="top_k50_t1.0",
         ),
         pytest.param(
-            "top_k640",
+            "top_k30",
             1.0,
-            id="top_k640_t1.0",
+            id="top_k30_t1.0",
         ),
         pytest.param(
             "ancestral_strict",
@@ -89,9 +89,9 @@ def test_compute_nll() -> None:
             id="top_k50_t1.5",
         ),
         pytest.param(
-            "top_k640",
+            "top_k30",
             1.5,
-            id="top_k640_t1.5",
+            id="top_k30_t1.5",
         ),
         pytest.param(
             "ancestral_strict",
@@ -115,7 +115,7 @@ def test_compute_nll_with_decoding_algorithms(
         "top_p095",
         "top_p090",
         "top_k50",
-        "top_k640",
+        "top_k30",
         "ancestral_strict",
         "ancestral",
         "typical_p090",
@@ -131,8 +131,8 @@ def test_compute_nll_with_decoding_algorithms(
         kwargs["top_p"] = 0.95
     elif sampling_type == "top_p090":
         kwargs["top_p"] = 0.90
-    elif sampling_type == "top_k640":
-        kwargs["top_k"] = 640
+    elif sampling_type == "top_k30":
+        kwargs["top_k"] = 30
     elif sampling_type in {"top_k50", "ancestral"}:
         kwargs["top_k"] = 50
     elif sampling_type == "ancestral_strict":
@@ -251,9 +251,9 @@ def test_compute_nll_explicit_no_prompt_parity() -> None:
             id="top_k50_t1.0",
         ),
         pytest.param(
-            "top_k640",
+            "top_k30",
             1.0,
-            id="top_k640_t1.0",
+            id="top_k30_t1.0",
         ),
         pytest.param(
             "ancestral_strict",
@@ -281,9 +281,9 @@ def test_compute_nll_explicit_no_prompt_parity() -> None:
             id="top_k50_t1.5",
         ),
         pytest.param(
-            "top_k640",
+            "top_k30",
             1.5,
-            id="top_k640_t1.5",
+            id="top_k30_t1.5",
         ),
         pytest.param(
             "ancestral_strict",
@@ -302,7 +302,7 @@ def test_compute_nll_with_prompt_and_decoding_algorithms(
         "top_p095",
         "top_p090",
         "top_k50",
-        "top_k640",
+        "top_k30",
         "ancestral_strict",
         "ancestral",
     ],
@@ -324,8 +324,8 @@ def test_compute_nll_with_prompt_and_decoding_algorithms(
         kwargs["top_p"] = 0.95
     elif sampling_type == "top_p090":
         kwargs["top_p"] = 0.90
-    elif sampling_type == "top_k640":
-        kwargs["top_k"] = 640
+    elif sampling_type == "top_k30":
+        kwargs["top_k"] = 30
     elif sampling_type in {"top_k50", "ancestral"}:
         kwargs["top_k"] = 50
     elif sampling_type == "ancestral_strict":

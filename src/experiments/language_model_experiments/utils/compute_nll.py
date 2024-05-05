@@ -22,14 +22,12 @@ def compute_nll(
     batch_size: int,
 ) -> List[float]:
     # NOTE: lifted from https://github.com/huggingface/evaluate/blob/main/metrics/perplexity/perplexity.py
-    # tokenizer should be right padded
     tokenizer = deepcopy(tokenizer)
-    tokenizer.padding_side = "right"  # type: ignore
+    model = model.eval()
 
     # if batch_size > 1 (which generally leads to padding being required), and
     # if there is not an already assigned pad_token, assign an existing
     # special token to also be the padding token
-    model = model.eval()
     if tokenizer.pad_token is None:
         existing_special_tokens = list(tokenizer.special_tokens_map_extended.values())
         # check that the model already has at least one special token defined
@@ -219,7 +217,6 @@ def _compute_nll_with_logitswarper(
 
     # 1.1 tokenizer should be right padded
     tokenizer = deepcopy(tokenizer)
-    tokenizer.padding_side = "right"  # type: ignore
 
     # 2. tokenize prompts (if needed)
     if condition_on_prompts is not None:
@@ -242,6 +239,11 @@ def _compute_nll_with_logitswarper(
         if i % 50 * batch_size == 0:
             print(f"Batch example: {batch[0]}")
             print(f"Batch prompt length: {batch_prompt_lengths[0]}")
+            print(
+                "Batch text being examined:"
+                f" {tokenizer.decode(tokenizer(batch[0])['input_ids'][batch_prompt_lengths[0]+1:])}"
+            )
+
         inputs = tokenizer(
             batch,
             add_special_tokens=add_special_tokens,
@@ -289,12 +291,9 @@ def _compute_nll_with_logitswarper(
         # 3.3 shift logits and apply warpers
         shift_logits = out_logits[..., :-1, :].contiguous()
         shift_warped_logits = torch.cat(
-            [shift_logits[:, 0, :].unsqueeze(dim=1)]
-            + [
+            [
                 logits_warpers(encoded_batch, shift_logits[:, i, :]).unsqueeze(dim=1)
-                for i in range(
-                    1, shift_logits.shape[1]
-                )  # we don't warp the first token
+                for i in range(shift_logits.shape[1])  # we don't warp the first token
             ],
             dim=1,
         )
@@ -317,7 +316,11 @@ def _compute_nll_with_logitswarper(
 
         # 3.5 zero out the nlls for the prompt
         for i, prompt_length in enumerate(batch_prompt_lengths):
-            nlls_not_summed[i, :prompt_length] = 0.0
+            start_idx = attn_mask.nonzero(as_tuple=True)[
+                i
+            ].min()  # if it's right padded or left padded, we start counting from the first '1'
+            print(start_idx)
+            nlls_not_summed[i, start_idx : start_idx + prompt_length] = 0.0
             assert not nlls_not_summed[i].isnan().any()
             assert not nlls_not_summed[i].isinf().any()
             assert not nlls_not_summed[i].sum().isinf()
