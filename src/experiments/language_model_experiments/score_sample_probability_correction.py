@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from pydantic_argparse import ArgumentParser
 
 import pandas as pd
+import torch
 
 from src.experiments.language_model_experiments.utils.prompt_text_processing import (
     transform_prompt,
@@ -42,7 +43,7 @@ class ScriptArguments(BaseModel):
         ),
         description="The path to save the generated outputs",
     )
-    device: Literal["auto", "cuda:0", "cuda:1"] = Field(
+    device: Literal["auto", "cuda:0", "cuda:1", "sequential"] = Field(
         "auto",
         title="Device",
         description="The device to use for generation",
@@ -120,7 +121,7 @@ def main():
 
     # Load the language model
     model = AutoModelForCausalLM.from_pretrained(
-        args.language_model, device_map=args.device
+        args.language_model, torch_dtype=torch.float16, device_map=args.device
     )
     tokenizer = AutoTokenizer.from_pretrained(args.language_model)
 

@@ -104,10 +104,8 @@ def main():
     assert (
         torch.cuda.device_count() > 1 or args.device == "cuda:0" or args.device == "cpu"
     )
-    model = (
-        AutoModelForCausalLM.from_pretrained(args.language_model, device_map="auto")
-        if args.device == "auto"
-        else AutoModelForCausalLM.from_pretrained(args.language_model).to(args.device)
+    model = AutoModelForCausalLM.from_pretrained(
+        args.language_model, torch_dtype=torch.float16, device_map=args.device
     )
     tokenizer = AutoTokenizer.from_pretrained(args.language_model)
 

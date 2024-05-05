@@ -215,7 +215,7 @@ def _compute_nll_with_logitswarper(
     else:
         max_tokenized_len = max_length
 
-    # 1.1 tokenizer should be right padded
+    # 1.1 tokenizer copy to avoid stateful changes
     tokenizer = deepcopy(tokenizer)
 
     # 2. tokenize prompts (if needed)
@@ -311,15 +311,17 @@ def _compute_nll_with_logitswarper(
             nlls_not_summed, nan=0.0
         )  # could have nan (padding tokens) so we zero them out
         nlls_not_summed = torch.clamp(
-            nlls_not_summed, min=0.0, max=25
-        )  # clamp to avoid inf, ln(1e-11) ~= -25
+            nlls_not_summed, min=0.0, max=23
+        )  # clamp to avoid inf, -ln(10^-10) ~= 23
 
         # 3.5 zero out the nlls for the prompt
         for i, prompt_length in enumerate(batch_prompt_lengths):
-            start_idx = attn_mask.nonzero(as_tuple=True)[
-                i
-            ].min()  # if it's right padded or left padded, we start counting from the first '1'
-            print(start_idx)
+            start_idx = (
+                shift_attention_mask_batch[i].nonzero(as_tuple=False).flatten().min()
+            )  # whether it's right padded or left padded, we start counting from the first '1'
+            assert shift_attention_mask_batch[i, start_idx] == 1 and (
+                shift_attention_mask_batch[i, start_idx - 1] == 0 or start_idx == 0
+            )
             nlls_not_summed[i, start_idx : start_idx + prompt_length] = 0.0
             assert not nlls_not_summed[i].isnan().any()
             assert not nlls_not_summed[i].isinf().any()

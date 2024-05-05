@@ -130,6 +130,7 @@ def main():
         device_map=args.device,
         **model_kwargs,  # NOTE: This is a hack to get around the fact that the model tends to break with float16
     )
+    pipeline.model = pipeline.model.eval()
     if not (tokenizer.pad_token):
         print("Adding pad token to tokenizer")
         pipeline.tokenizer.add_special_tokens({"pad_token": "[PAD]"})  # type: ignore
