@@ -73,6 +73,7 @@ class ScriptArguments(BaseModel):
         "ancestral_strict",
         "ancestral",
         "typical_p090",
+        "eta_n00009",
     ] = Field(
         "top_p095",
         title="Sampling Type",
@@ -151,6 +152,8 @@ def main():
         sampling_kwargs["top_k"] = 0
     elif args.sampling_type == "typical_p090":
         sampling_kwargs["typical_p"] = 0.90
+    elif args.sampling_type == "eta_n00009":
+        sampling_kwargs["eta_cutoff"] = 0.0009
     else:
         raise ValueError(f"Invalid sampling type: {args.sampling_type}")
 

@@ -74,6 +74,11 @@ def test_compute_nll() -> None:
             id="typical_p090_t1.0",
         ),
         pytest.param(
+            "eta_n00009",
+            1.0,
+            id="eta_n00009_t1.0",
+        ),
+        pytest.param(
             "top_p095",
             1.5,
             id="top_p095_t1.5",
@@ -108,6 +113,11 @@ def test_compute_nll() -> None:
             1.5,
             id="typical_p090_t1.5",
         ),
+        pytest.param(
+            "eta_n00009",
+            1.5,
+            id="eta_n00009_t.15",
+        ),
     ],
 )
 def test_compute_nll_with_decoding_algorithms(
@@ -119,6 +129,7 @@ def test_compute_nll_with_decoding_algorithms(
         "ancestral_strict",
         "ancestral",
         "typical_p090",
+        "eta_n00009",
     ],
     temperature: float,
 ) -> None:
@@ -140,6 +151,8 @@ def test_compute_nll_with_decoding_algorithms(
         kwargs["top_p"] = 1.0
     elif sampling_type == "typical_p090":
         kwargs["typical_p"] = 0.90
+    elif sampling_type == "eta_n00009":
+        kwargs["eta_cutoff"] = 0.0009
     else:
         raise ValueError(f"Invalid sampling_type: {sampling_type}")
 
@@ -188,6 +201,7 @@ def test_compute_nll_with_decoding_parity() -> None:
         top_k=0,
         top_p=1.0,
         temperature=1.0,
+        eta_cutoff=0.0,
         typical_p=None,
     )
 
@@ -222,6 +236,7 @@ def test_compute_nll_explicit_no_prompt_parity() -> None:
         top_k=0,
         top_p=1.0,
         temperature=1.0,
+        eta_cutoff=0.0,
         condition_on_prompts=None,
         typical_p=None,
     )

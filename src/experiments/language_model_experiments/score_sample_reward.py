@@ -74,9 +74,11 @@ def main():
     # Load the reward model
     tokenizer = AutoTokenizer.from_pretrained(args.reward_model)
     reward_model = AutoModelForScore.from_pretrained(
-        args.reward_model, device_map=args.device
+        args.reward_model,
+        device_map=args.device,
+        torch_dtype=torch.float16,
     )
-    reward_model.eval()
+    reward_model = reward_model.eval()
 
     # Score the data
     raw_texts: List[str] = df["generated_text"].tolist()

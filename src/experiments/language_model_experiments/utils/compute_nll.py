@@ -7,6 +7,7 @@ from transformers.generation.logits_process import (  # type: ignore
     TopKLogitsWarper,
     TopPLogitsWarper,
     TypicalLogitsWarper,
+    EtaLogitsWarper,
 )
 from torch.nn import CrossEntropyLoss
 from copy import deepcopy
@@ -123,12 +124,16 @@ def compute_nll_with_decoding_algorithms(
     top_k: int = 0,
     top_p: float = 1.0,
     typical_p: Optional[float] = None,
+    eta_cutoff: float = 0.0,
     temperature: float = 1.0,
 ) -> List[float]:
     # instantiate warpers list
     assert top_k >= 0, f"top_k must be >= 0, got {top_k}"
     assert 0.0 < top_p <= 1.0, f"top_p must be in (0.0, 1.0], got {top_p}"
     assert temperature > 0.0, f"temperature must be > 0.0, got {temperature}"
+    assert (
+        0.0 <= eta_cutoff < 1.0
+    ), f"eta_cutoff must be in [0.0, 1.0), got {eta_cutoff}"
     assert (
         typical_p is None or typical_p > 0.0
     ), f"typical_p must be > 0.0, got {typical_p}"
@@ -147,6 +152,10 @@ def compute_nll_with_decoding_algorithms(
     if typical_p is not None:
         warpers.append(
             TypicalLogitsWarper(mass=typical_p, min_tokens_to_keep=min_tokens_to_keep)
+        )
+    if eta_cutoff is not None and eta_cutoff > 0.0:
+        warpers.append(
+            EtaLogitsWarper(epsilon=eta_cutoff, min_tokens_to_keep=min_tokens_to_keep)
         )
 
     return _compute_nll_with_logitswarper(
@@ -310,9 +319,6 @@ def _compute_nll_with_logitswarper(
         nlls_not_summed = torch.nan_to_num(
             nlls_not_summed, nan=0.0
         )  # could have nan (padding tokens) so we zero them out
-        nlls_not_summed = torch.clamp(
-            nlls_not_summed, min=0.0, max=23
-        )  # clamp to avoid inf, -ln(10^-10) ~= 23
 
         # 3.5 zero out the nlls for the prompt
         for i, prompt_length in enumerate(batch_prompt_lengths):
@@ -324,8 +330,14 @@ def _compute_nll_with_logitswarper(
             )
             nlls_not_summed[i, start_idx : start_idx + prompt_length] = 0.0
             assert not nlls_not_summed[i].isnan().any()
-            assert not nlls_not_summed[i].isinf().any()
-            assert not nlls_not_summed[i].sum().isinf()
+            if nlls_not_summed[i].isinf().any():
+                # infinities shouldn't happen, but they can due to randomness in cuda
+                # see https://huggingface.co/docs/diffusers/en/using-diffusers/reproducibility
+                print(
+                    f"Infinity encountered! Text: {batch[i]},  prompt length:"
+                    f" {prompt_length}, start_idx: {start_idx}, nlls:"
+                    f" {nlls_not_summed[i]}"
+                )
         nll_batch = nlls_not_summed.sum(dim=1)
 
         nlls += nll_batch.tolist()

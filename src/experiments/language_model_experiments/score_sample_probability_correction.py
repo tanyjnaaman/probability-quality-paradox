@@ -85,6 +85,7 @@ class ScriptArguments(BaseModel):
         "ancestral_strict",
         "ancestral",
         "typical_p090",
+        "eta_n00009",
     ] = Field(
         title="Sampling Type",
         description="The sampling type to use for scoring negative log likelihoods",
@@ -142,6 +143,8 @@ def main():
         kwargs["top_p"] = 1.0
     elif args.sampling_type == "typical_p090":
         kwargs["typical_p"] = 0.90
+    elif args.sampling_type == "eta_n00009":
+        kwargs["eta_cutoff"] = 0.0009
     else:
         raise ValueError(f"Invalid sampling_type: {args.sampling_type}")
     biased_nlls = compute_nll_with_decoding_algorithms(

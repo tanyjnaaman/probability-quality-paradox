@@ -131,6 +131,7 @@ def main():
             top_k=0,
             top_p=1.0,
             typical_p=None,
+            eta_cutoff=0.0,
             temperature=1.0,
         )
     )
