@@ -316,9 +316,12 @@ def _compute_nll_with_logitswarper(
             )
             * shift_attention_mask_batch
         )
-        nlls_not_summed = torch.nan_to_num(
-            nlls_not_summed, nan=0.0
-        )  # could have nan (padding tokens) so we zero them out
+        # could have nan (padding tokens) so we zero them out
+        nlls_not_summed = torch.nan_to_num(nlls_not_summed, nan=0.0)
+        # infinities shouldn't happen, but they can due to randomness in cuda
+        # see https://huggingface.co/docs/diffusers/en/using-diffusers/reproducibility
+        # so we clamp them at -ln(10^-11) ~= 25.0
+        nlls_not_summed = torch.clamp(nlls_not_summed, min=0.0, max=25.0)
 
         # 3.5 zero out the nlls for the prompt
         for i, prompt_length in enumerate(batch_prompt_lengths):
@@ -330,14 +333,11 @@ def _compute_nll_with_logitswarper(
             )
             nlls_not_summed[i, start_idx : start_idx + prompt_length] = 0.0
             assert not nlls_not_summed[i].isnan().any()
-            if nlls_not_summed[i].isinf().any():
-                # infinities shouldn't happen, but they can due to randomness in cuda
-                # see https://huggingface.co/docs/diffusers/en/using-diffusers/reproducibility
-                print(
-                    f"Infinity encountered! Text: {batch[i]},  prompt length:"
-                    f" {prompt_length}, start_idx: {start_idx}, nlls:"
-                    f" {nlls_not_summed[i]}"
-                )
+            assert not nlls_not_summed[i].isinf().any(), (
+                f"Infinity encountered! Text: {batch[i]},  prompt length:"
+                f" {prompt_length}, start_idx: {start_idx}, nlls:"
+                f" {nlls_not_summed[i]}"
+            )
         nll_batch = nlls_not_summed.sum(dim=1)
 
         nlls += nll_batch.tolist()
