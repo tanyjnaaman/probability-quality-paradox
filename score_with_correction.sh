@@ -20,7 +20,10 @@ file_paths=(
     # "ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt1000_numgenerations2_eta_n00009_t1.0_humanassistant.csv"
     # "ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt1000_numgenerations2_eta_n00009_t1.5_humanassistant.csv"
     # "ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt1000_numgenerations2_eta_n00009_t2.0_humanassistant.csv"
-    "ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt1000_numgenerations2_ancestral_strict_t1.0_humanassistant.csv"
+    # "ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt1000_numgenerations2_ancestral_strict_t1.0_humanassistant.csv"
+    "ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt1000_numgenerations2_ancestral_strict_t1.5_humanassistant.csv"
+    "ethz-spylab-rlhf-7b-harmless_l256_promptseed42_numprompt1000_numgenerations2_ancestral_strict_t2.0_humanassistant.csv"
+
 )
 sampling_types=(
     # "ancestral"
@@ -41,6 +44,8 @@ sampling_types=(
     # "eta_n00009"
     # "eta_n00009"
     # "eta_n00009"
+    # "ancestral_strict"
+    "ancestral_strict"
     "ancestral_strict"
 
 )
@@ -63,7 +68,9 @@ temperatures=(
     # "1.0"
     # "1.5"
     # "2.0"
-    "1.0"
+    # "1.0"
+    "1.5"
+    "2.0"
 )
 batch_size=2
 
@@ -76,11 +83,11 @@ do
 
     echo "Scoring $file_path"
     # with human assistant format for reward model
-    # python -m src.experiments.language_model_experiments.score_sample_reward --csv-file-path $file_path --batch-size $batch_size --add-human-assistant-format
+    python -m src.experiments.language_model_experiments.score_sample_reward --csv-file-path $file_path --batch-size $batch_size --add-human-assistant-format
     
     # only generated text for probability
-    # python -m src.experiments.language_model_experiments.score_sample_probability --csv-file-path $file_path --batch-size $batch_size --no-include-prompt
-    # python -m src.experiments.language_model_experiments.score_sample_probability --csv-file-path $file_path --batch-size $batch_size --add-human-assistant-format  --condition-on-prompt
+    python -m src.experiments.language_model_experiments.score_sample_probability --csv-file-path $file_path --batch-size $batch_size --no-include-prompt
+    python -m src.experiments.language_model_experiments.score_sample_probability --csv-file-path $file_path --batch-size $batch_size --add-human-assistant-format  --condition-on-prompt
 
 
     # with human assistant format for probability under generation model (for correction)
