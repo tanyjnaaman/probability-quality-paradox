@@ -118,11 +118,7 @@ def main():
     )
 
     # Load model
-    model_kwargs = (
-        {"model_kwargs": {"load_in_8bit": True}}
-        if args.model == "meta-llama/Llama-2-7b-hf"
-        else {}
-    )
+    model_kwargs = {}
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     pipeline = transformers.pipeline(
         "text-generation",
@@ -134,7 +130,7 @@ def main():
     pipeline.model = pipeline.model.eval()
     if not (tokenizer.pad_token):
         print("Adding pad token to tokenizer")
-        pipeline.tokenizer.add_special_tokens({"pad_token": "[PAD]"})  # type: ignore
+        pipeline.tokenizer.pad_token_id = pipeline.tokenizer.bos_token_id  # type: ignore
 
     # Generate
     outputs: Dict[str, List[str]] = dict(prompt=[], generated_text=[])
