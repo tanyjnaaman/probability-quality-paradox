@@ -74,6 +74,7 @@ class ScriptArguments(BaseModel):
         "ancestral",
         "typical_p090",
         "eta_n00009",
+        "greedy",
     ] = Field(
         "top_p095",
         title="Sampling Type",
@@ -150,6 +151,8 @@ def main():
         sampling_kwargs["typical_p"] = 0.90
     elif args.sampling_type == "eta_n00009":
         sampling_kwargs["eta_cutoff"] = 0.0009
+    elif args.sampling_type == "greedy":
+        pass
     else:
         raise ValueError(f"Invalid sampling type: {args.sampling_type}")
 
@@ -158,7 +161,7 @@ def main():
         batched_prompts = [row["prompt"]] * args.num_generations_per_prompt
         sequences = pipeline(
             batched_prompts,
-            do_sample=True,
+            do_sample=True if args.sampling_type != "greedy" else False,
             num_return_sequences=1,
             eos_token_id=tokenizer.eos_token_id,
             max_length=args.max_length,
