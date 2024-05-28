@@ -1,7 +1,9 @@
 # data files
 *.csv
+*.zip
 backup/
 
 # cache
 __pycache__/
 .mypy_cache/
+.pytest_cache/

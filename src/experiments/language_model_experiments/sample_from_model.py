@@ -66,7 +66,15 @@ class ScriptArguments(BaseModel):
         description="The device to use for generation",
     )
     sampling_type: Literal[
-        "top_p095", "top_p090", "top_k50", "top_k640", "ancestral_strict", "ancestral"
+        "top_p095",
+        "top_p090",
+        "top_k50",
+        "top_k30",
+        "ancestral_strict",
+        "ancestral",
+        "typical_p090",
+        "eta_n00009",
+        "greedy",
     ] = Field(
         "top_p095",
         title="Sampling Type",
@@ -109,19 +117,21 @@ def main():
         .shuffle(seed=args.prompt_selection_seed)
         .select(range(args.prompt_start_idx, args.prompt_start_idx + args.num_prompts))
     )
-    assert (
-        len(prompts) == args.num_prompts
-    ), f"Expected {args.num_prompts} prompts, got {len(prompts)}"
-    print(f"Example prompts: {prompts['prompt'][:3]}")
 
     # Load model
+    model_kwargs = {}
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     pipeline = transformers.pipeline(
         "text-generation",
         model=args.model,
         torch_dtype=torch.float16,
         device_map=args.device,
+        **model_kwargs,  # NOTE: This is a hack to get around the fact that the model tends to break with float16
     )
+    pipeline.model = pipeline.model.eval()
+    if not (tokenizer.pad_token):
+        print("Adding pad token to tokenizer")
+        pipeline.tokenizer.pad_token_id = pipeline.tokenizer.bos_token_id  # type: ignore
 
     # Generate
     outputs: Dict[str, List[str]] = dict(prompt=[], generated_text=[])
@@ -130,20 +140,28 @@ def main():
         sampling_kwargs["top_p"] = 0.95
     elif args.sampling_type == "top_p090":
         sampling_kwargs["top_p"] = 0.90
-    elif args.sampling_type == "top_k640":
-        sampling_kwargs["top_k"] = 640
-    elif args.sampling_type == "top_k50":
+    elif args.sampling_type == "top_k30":
+        sampling_kwargs["top_k"] = 30
+    elif args.sampling_type in {"top_k50", "ancestral"}:
         sampling_kwargs["top_k"] = 50
     elif args.sampling_type == "ancestral_strict":
         sampling_kwargs["top_p"] = 1.0
         sampling_kwargs["top_k"] = 0
+    elif args.sampling_type == "typical_p090":
+        sampling_kwargs["typical_p"] = 0.90
+    elif args.sampling_type == "eta_n00009":
+        sampling_kwargs["eta_cutoff"] = 0.0009
+    elif args.sampling_type == "greedy":
+        pass
+    else:
+        raise ValueError(f"Invalid sampling type: {args.sampling_type}")
 
     print(f"Sampling type: {args.sampling_type}, sampling kwargs: {sampling_kwargs}")
     for row in tqdm(prompts):
         batched_prompts = [row["prompt"]] * args.num_generations_per_prompt
         sequences = pipeline(
             batched_prompts,
-            do_sample=True,
+            do_sample=True if args.sampling_type != "greedy" else False,
             num_return_sequences=1,
             eos_token_id=tokenizer.eos_token_id,
             max_length=args.max_length,
