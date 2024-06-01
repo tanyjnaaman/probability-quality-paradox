@@ -130,10 +130,10 @@ def main():
         # 3.2 clean
         df["log_probability"] = -df["negative_log_probability"]
         df = df[df.apply(lambda row: len(row["generated_text"]) > 0, axis=1)]
-        df = df[not df["negative_log_probability"].isin([-np.inf, np.inf])]
-        df = df[not df["negative_log_probability"].isnull()]
-        df = df[not df["score"].isin([-np.inf, np.inf])]
-        df = df[not df["score"].isnull()]
+        df = df[~df["negative_log_probability"].isin([-np.inf, np.inf])]
+        df = df[~df["negative_log_probability"].isnull()]
+        df = df[~df["score"].isin([-np.inf, np.inf])]
+        df = df[~df["score"].isnull()]
         df = df.drop_duplicates()
         assert len(df) > 0
         print(f"Length: {len(df)}")
@@ -160,7 +160,7 @@ def main():
             marker=marker,
             label=(
                 f"{sampling_type_metadata.pretty_name}"
-                if sampling_type_metadata.temperature == 1.0
+                if sampling_type_metadata.temperature == 1.5
                 else None
             ),
         )
@@ -204,7 +204,7 @@ def main():
             alpha=sampling_type_metadata.alpha,
             label=(
                 f"{sampling_type_metadata.pretty_name}"
-                if sampling_type_metadata.temperature == 1.0
+                if sampling_type_metadata.temperature == 1.5
                 else None
             ),
         )
