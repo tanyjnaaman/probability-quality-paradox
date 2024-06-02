@@ -434,7 +434,7 @@ def get_metadata_for_sampling_type(
     sampling_type_to_colour = {
         k: colors[i] for i, k in enumerate(sampling_type_keywords)
     }
-    alpha = (temperature - 0.5) / (1.5 - 0.5)
+    alpha = max((temperature - 0.5) / (1.5 - 0.5), 0.1)
     color = color_mixer(
         color_mixer("#ffffff", sampling_type_to_colour[sampling_type], 0.25),
         sampling_type_to_colour[sampling_type],
