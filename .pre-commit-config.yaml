@@ -3,7 +3,7 @@ repos:
     rev: 23.12.1
     hooks:
       - id: black
-        args: [--preview]
+        args: [--preview --verbose]
         language_version: python3.9
       - id: black-jupyter
         args: [--preview]
