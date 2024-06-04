@@ -161,6 +161,7 @@ def main():
             label=(
                 f"{sampling_type_metadata.pretty_name}"
                 if sampling_type_metadata.temperature == 1.5
+                or sampling_type_metadata.sampling_type == "ancestral_strict"
                 else None
             ),
         )
@@ -205,6 +206,7 @@ def main():
             label=(
                 f"{sampling_type_metadata.pretty_name}"
                 if sampling_type_metadata.temperature == 1.5
+                or sampling_type_metadata.sampling_type == "ancestral_strict"
                 else None
             ),
         )
