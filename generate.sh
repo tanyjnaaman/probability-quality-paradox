@@ -10,15 +10,15 @@ prompt_selection_seed=42
 num_prompts=1000
 num_generations_per_prompt=2
 batch_size=2
-device="cuda:1"
+device="cuda:0"
 sampling_types=(
-    # "ancestral_strict"
-    # "top_k50"
-    # "top_k30" 
-    # "eta_n00009"
-    "top_p090"
-    "top_p095" 
-    "typical_p090"
+    "ancestral_strict"
+    "top_k50"
+    "top_k30" 
+    "eta_n00009"
+    # "top_p090"
+    # "top_p095" 
+    # "typical_p090"
 )
 sampling_temperatures=(
     0.5

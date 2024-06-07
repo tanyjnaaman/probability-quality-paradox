@@ -113,7 +113,8 @@ def main():
             prompt,
             text,
             args.add_human_assistant_format,
-            args.include_prompt,  # TODO: modify this to include model type
+            args.include_prompt,
+            args.language_model,
         )
         for prompt, text in zip(raw_prompts, raw_texts)
     ]

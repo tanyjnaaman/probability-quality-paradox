@@ -105,8 +105,7 @@ for line in $file_paths_sampling_types_temps; do
     
     # only generated text for probability
     python -m src.experiments.language_model_experiments.score_sample_probability --csv-file-path $file_path --batch-size $batch_size --no-include-prompt --language-model $language_model
-    python -m src.experiments.language_model_experiments.score_sample_probability --csv-file-path $file_path --batch-size $batch_size --add-human-assistant-format  --condition-on-prompt --language-model $language_model
 
-    # with human assistant format for probability under generation model (for correction)
+    # with human assistant format for probability under generation model
     python -m src.experiments.language_model_experiments.score_sample_probability_correction --csv-file-path $file_path --batch-size $batch_size --add-human-assistant-format --sampling-type $sampling_type --language-model $rlhf_model --sampling-temperature $temperature --condition-on-prompt
 done

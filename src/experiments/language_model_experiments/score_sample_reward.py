@@ -7,6 +7,9 @@ from pydantic_argparse import ArgumentParser
 from src.experiments.language_model_experiments.utils.prompt_text_processing import (
     transform_prompt_and_text,
 )
+from src.experiments.language_model_experiments.utils.suppl_model import (
+    LLMForSequenceRegression,
+)
 from src.packages.safe_rlhf import AutoModelForScore
 import pandas as pd
 import torch
@@ -73,11 +76,18 @@ def main():
 
     # Load the reward model
     tokenizer = AutoTokenizer.from_pretrained(args.reward_model)
-    reward_model = AutoModelForScore.from_pretrained(
-        args.reward_model,
-        device_map=args.device,
-        torch_dtype=torch.float16,
-    )
+    if args.reward_model in {"ethz-spylab/reward_model"}:
+        reward_model = AutoModelForScore.from_pretrained(
+            args.reward_model,
+            device_map=args.device,
+            torch_dtype=torch.float16,
+        )
+    elif args.reward_model in {"kaist-ai/janus-rm-7b"}:
+        reward_model = LLMForSequenceRegression(
+            args.reward_model, device_map=args.device, torch_dtype=torch.float16
+        )
+    else:
+        raise ValueError(f"Invalid reward model: {args.reward_model}")
     reward_model = reward_model.eval()
 
     # Score the data

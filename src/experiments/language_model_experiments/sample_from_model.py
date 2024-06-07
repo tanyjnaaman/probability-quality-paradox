@@ -102,6 +102,7 @@ def main():
                 "prompt": transform_prompt(
                     pair["chosen"].split("\n\n")[1].lstrip("Human:").strip(),
                     args.human_assistant_format,
+                    args.model,
                 )
             }
         )
@@ -151,8 +152,8 @@ def main():
         raise ValueError(f"Invalid sampling type: {args.sampling_type}")
 
     print(f"Sampling type: {args.sampling_type}, sampling kwargs: {sampling_kwargs}")
-    for row in tqdm(prompts):
-        batched_prompts = [row["prompt"]] * args.num_generations_per_prompt
+    for prompt in tqdm(prompts):
+        batched_prompts = [prompt] * args.num_generations_per_prompt
         sequences = pipeline(
             batched_prompts,
             do_sample=True if args.sampling_type != "greedy" else False,
@@ -166,12 +167,12 @@ def main():
         )
         assert len(sequences) == args.num_generations_per_prompt
         generated_texts = [
-            sequence[0]["generated_text"][len(row["prompt"].strip()) :].strip()
+            sequence[0]["generated_text"][len(prompt.strip()) :].strip()
             for sequence in sequences
         ]
         outputs["prompt"].extend(batched_prompts)
         outputs["generated_text"].extend(generated_texts)
-        print(f"Prompt completed: {row['prompt']}\nGenerated: {generated_texts[0]}")
+        print(f"Prompt completed: {prompt}\nGenerated: {generated_texts[0]}")
 
     # Save outputs
     save_path = (
