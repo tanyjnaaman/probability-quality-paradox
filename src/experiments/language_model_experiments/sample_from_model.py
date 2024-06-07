@@ -10,6 +10,10 @@ import transformers
 import pandas as pd
 import torch
 
+from src.experiments.language_model_experiments.utils.prompt_text_processing import (
+    transform_prompt,
+)
+
 
 class ScriptArguments(BaseModel):
     model: str = Field(
@@ -92,19 +96,20 @@ def main():
 
     # Construct prompts
     dataset = load_dataset("Anthropic/hh-rlhf")["test"]
-    prompts = (
+    prompts = (  # TODO: make this into a function that takes model type as arg
         dataset.map(
             lambda pair: {
-                "prompt": (
-                    pair["chosen"].split("\n\n")[1].lstrip("Human:").strip()
-                    if not args.human_assistant_format
-                    else pair["chosen"].split("\n\n")[1].strip() + "\n\nAssistant:"
+                "prompt": transform_prompt(
+                    pair["chosen"].split("\n\n")[1].lstrip("Human:").strip(),
+                    args.human_assistant_format,
                 )
             }
         )
         .filter(lambda row: len(row["prompt"]) < args.max_length)
         .shuffle(seed=args.prompt_selection_seed)
         .select(range(args.num_prompts))
+        .to_pandas()["prompt"]
+        .tolist()
     )
 
     # Load model

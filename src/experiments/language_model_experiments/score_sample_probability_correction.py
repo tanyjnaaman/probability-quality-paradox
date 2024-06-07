@@ -110,7 +110,10 @@ def main():
     raw_prompts: List[str] = df["prompt"].tolist()
     texts = [
         transform_prompt_and_text(
-            prompt, text, args.add_human_assistant_format, args.include_prompt
+            prompt,
+            text,
+            args.add_human_assistant_format,
+            args.include_prompt,  # TODO: modify this to include model type
         )
         for prompt, text in zip(raw_prompts, raw_texts)
     ]
