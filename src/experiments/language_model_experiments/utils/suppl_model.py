@@ -7,14 +7,14 @@ from transformers.models.mistral.modeling_mistral import MistralModel
 from transformers.models.mistral.modeling_mistral import MistralPreTrainedModel
 
 
-class LLMForSequenceRegression(MistralModel):
+class LLMForSequenceRegression(MistralPreTrainedModel):
     """
     Adapted from https://huggingface.co/kaist-ai/janus-rm-7b.
     """
 
     def __init__(self, config: AutoConfig):
         super().__init__(config)
-        setattr(self, self.base_model_prefix, MistralPreTrainedModel(config))
+        setattr(self, self.base_model_prefix, MistralModel(config))
 
         self.value_head = nn.Linear(config.hidden_size, 1, bias=False)
 

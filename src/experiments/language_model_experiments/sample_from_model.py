@@ -15,6 +15,7 @@ from src.experiments.language_model_experiments.utils.prompt_text_processing imp
 )
 
 
+# TODO: add arg to control where reward come from (from model, or p+/p)
 class ScriptArguments(BaseModel):
     model: str = Field(
         "meta-llama/Llama-2-7b-hf",
@@ -94,15 +95,17 @@ def main():
     parser = ArgumentParser(model=ScriptArguments)
     args = parser.parse_typed_args()
 
-    # Construct prompts
-    dataset = load_dataset("Anthropic/hh-rlhf")["test"]
-    prompts = (  # TODO: make this into a function that takes model type as arg
+    # Construct prompts, fixed dataset
+    dataset = load_dataset("Anthropic/hh-rlhf")["test"].map(
+        lambda pair: {
+            "prompt": pair["chosen"].split("\n\n")[1].lstrip("Human:").strip()
+        }
+    )
+    prompts = (
         dataset.map(
-            lambda pair: {
+            lambda row: {
                 "prompt": transform_prompt(
-                    pair["chosen"].split("\n\n")[1].lstrip("Human:").strip(),
-                    args.human_assistant_format,
-                    args.model,
+                    row["prompt"], args.human_assistant_format, args.model
                 )
             }
         )
@@ -112,6 +115,9 @@ def main():
         .to_pandas()["prompt"]
         .tolist()
     )
+    assert (
+        len(prompts) == args.num_prompts
+    ), f"Expected {args.num_prompts} prompts, got {len(prompts)} prompts"
 
     # Load model
     model_kwargs = {}

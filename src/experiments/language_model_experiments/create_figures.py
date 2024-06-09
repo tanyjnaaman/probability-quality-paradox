@@ -11,7 +11,7 @@ import matplotlib
 
 from tabulate import tabulate  # type: ignore
 from numba import prange  # type: ignore
-from scipy.stats import pearsonr, spearmanr, zscore, chi2_contingency  # type: ignore
+from scipy.stats import pearsonr, spearmanr, chi2_contingency  # type: ignore
 from pydantic_argparse import ArgumentParser
 from pydantic import BaseModel, Field
 from typing import List
@@ -145,6 +145,7 @@ def main():
                 tablefmt="psql",
             )
         )
+        # TODO: add secret reward here
 
         # 3.3 plot string level
         spearman = spearmanr(df["score"], df["log_probability"])

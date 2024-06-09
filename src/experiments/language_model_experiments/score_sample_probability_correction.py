@@ -120,7 +120,7 @@ def main():
     ]
     print(f"Examples: {texts[:3]}")
     prompts = [
-        transform_prompt(prompt, args.add_human_assistant_format)
+        transform_prompt(prompt, args.add_human_assistant_format, args.language_model)
         for prompt in raw_prompts
     ]
 
