@@ -36,6 +36,15 @@ class ScriptArguments(BaseModel):
         title="Overwrite Cache",
         description="Whether to overwrite the cache",
     )
+    use_secret_reward: bool = Field(
+        False,
+        title="Use Secret Reward",
+        description="Whether to use the secret reward function",
+    )
+    figure_name: str = Field(
+        title="Figure Name",
+        description="The name of the figure to save",
+    )
 
 
 class SamplingTypeMetadata(BaseModel):
@@ -115,11 +124,10 @@ def main():
     total_mean_corpuses = None
     total_corpus = None
     for reward_df_file, nll_df_file, correction_df_file in tqdm(triplet_files):
+        # 3.0 load and merge
         sampling_type_metadata = get_metadata_for_sampling_type(
             reward_df_file, args.cache_dir
         )
-
-        # 3.1 load and merge
         reward_df = pd.read_csv(f"{args.input_data_dir}/{reward_df_file}")
         nll_df = pd.read_csv(f"{args.input_data_dir}/{nll_df_file}")
         correction_df = pd.read_csv(f"{args.input_data_dir}/{correction_df_file}")
@@ -127,8 +135,16 @@ def main():
             nll_df, on=["prompt", "generated_text"], how="inner"
         ).merge(correction_df, on=["prompt", "generated_text"], how="inner")
 
-        # 3.2 clean
+        # 3.1 populate
         df["log_probability"] = -df["negative_log_probability"]
+        df["secret_reward"] = (
+            df["original_negative_log_probability"] + df["log_probability"]
+        )
+        if args.use_secret_reward:
+            print("Using secret reward.")
+            df["score"] = df["secret_reward"]
+
+        # 3.2 clean
         df = df[df.apply(lambda row: len(row["generated_text"]) > 0, axis=1)]
         df = df[~df["negative_log_probability"].isin([-np.inf, np.inf])]
         df = df[~df["negative_log_probability"].isnull()]
@@ -145,7 +161,6 @@ def main():
                 tablefmt="psql",
             )
         )
-        # TODO: add secret reward here
 
         # 3.3 plot string level
         spearman = spearmanr(df["score"], df["log_probability"])
@@ -284,8 +299,11 @@ def main():
     axs[1].legend(**legend_kwargs)
 
     plt.legend(**legend_kwargs)
-    plt.savefig("correlations.svg", bbox_inches="tight", format="svg")
-    plt.savefig("correlations.png", bbox_inches="tight", format="png")
+    plt.savefig(
+        f"{args.figure_name}.png",
+        bbox_inches="tight",
+        format="png",
+    )
     plt.close()
 
 

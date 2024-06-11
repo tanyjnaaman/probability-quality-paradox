@@ -2,7 +2,7 @@
 set -euxo pipefail
 
 models=(
-    # "ethz-spylab/rlhf-7b-harmless" 
+    "ethz-spylab/rlhf-7b-harmless" 
     "kaist-ai/janus-dpo-7b"
 )
 max_length=256
@@ -16,9 +16,9 @@ sampling_types=(
     "top_k50"
     "top_k30" 
     "eta_n00009"
-    # "top_p090"
-    # "top_p095" 
-    # "typical_p090"
+    "top_p090"
+    "top_p095" 
+    "typical_p090"
 )
 sampling_temperatures=(
     0.5
