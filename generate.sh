@@ -2,7 +2,6 @@
 set -euxo pipefail
 
 model="ethz-spylab/rlhf-7b-harmless" 
-# model="meta-llama/Llama-2-7b-hf"
 max_length=256
 prompt_selection_seed=42
 num_prompts=1000
@@ -10,24 +9,20 @@ num_generations_per_prompt=2
 batch_size=2
 device="cuda:1"
 sampling_types=(
-    # "ancestral_strict"
-    # "ancestral"
-    # "top_k30" 
+    "ancestral_strict"
+    "ancestral"
+    "top_k30" 
     "eta_n00009"
     "top_p090"
     "top_p095" 
     "typical_p090"
-    # "greedy"
 )
 sampling_temperatures=(
-    # 0.5
-    # 0.75
-    0.95
-    # 1.0 
-    1.05
-    # 1.25
-    # 1.5 
-    # 2.0
+    0.5
+    0.75
+    1.0 
+    1.25
+    1.5 
 )
 prompt_start_idx=0
 prompt_dataset_split="test"

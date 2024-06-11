@@ -26,4 +26,5 @@ jobs:
           options: "--preview --check --verbose"
           src: "./src"
           jupyter: false
+          version: "23.12.1"
 
