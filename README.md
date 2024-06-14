@@ -34,12 +34,14 @@ bash create_figures.sh
 ```
 bash generate.sh
 ```
-This should generatee `.csv` files of generated text.
+This should produce 50 `.csv` files of generated text.
+
 2. Score all 25 corpora with:
 ```
 bash score_with_correction.sh
 ```
-Comment out files and model settings as needed. 
+Comment out the files and model settings as needed before running the script. 
+
 For every `.csv` file, this should produce 3 files scoring the reward and log-probabilities of the generated strings.
 When this is done, move all files to `src/language_model_experiments/data`  and `src/language_model_experiments/data_dpo`, for the RLHF-tuned model and DPO-tuned model, respectively.
 
