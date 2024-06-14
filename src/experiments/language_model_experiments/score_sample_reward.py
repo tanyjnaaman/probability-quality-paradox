@@ -1,11 +1,14 @@
 from typing import List, Optional
 from typing_extensions import Literal
 from tqdm import tqdm
-from transformers import AutoTokenizer  # type: ignore
+from transformers import AutoTokenizer, AutoConfig  # type: ignore
 from pydantic import BaseModel, Field
 from pydantic_argparse import ArgumentParser
 from src.experiments.language_model_experiments.utils.prompt_text_processing import (
     transform_prompt_and_text,
+)
+from src.experiments.language_model_experiments.utils.suppl_model import (
+    LLMForSequenceRegression,
 )
 from src.packages.safe_rlhf import AutoModelForScore
 import pandas as pd
@@ -73,11 +76,23 @@ def main():
 
     # Load the reward model
     tokenizer = AutoTokenizer.from_pretrained(args.reward_model)
-    reward_model = AutoModelForScore.from_pretrained(
-        args.reward_model,
-        device_map=args.device,
-        torch_dtype=torch.float16,
-    )
+    if args.reward_model in {"ethz-spylab/reward_model"}:
+        reward_model = AutoModelForScore.from_pretrained(
+            args.reward_model,
+            device_map=args.device,
+            torch_dtype=torch.float16,
+        )
+    elif args.reward_model in {"kaist-ai/janus-rm-7b"}:
+        config = AutoConfig.from_pretrained(args.reward_model)
+        config.normalize_reward = True
+        reward_model = LLMForSequenceRegression.from_pretrained(
+            args.reward_model,
+            device_map=args.device,
+            torch_dtype=torch.float16,
+            config=config,
+        )
+    else:
+        raise ValueError(f"Invalid reward model: {args.reward_model}")
     reward_model = reward_model.eval()
 
     # Score the data
@@ -85,7 +100,11 @@ def main():
     prompts: List[str] = df["prompt"].tolist()
     texts = [
         transform_prompt_and_text(
-            prompt, text, args.add_human_assistant_format, args.include_prompt
+            prompt,
+            text,
+            args.add_human_assistant_format,
+            args.include_prompt,
+            args.reward_model,
         )
         for prompt, text in zip(prompts, raw_texts)
     ]
@@ -105,8 +124,14 @@ def main():
             max_length=args.max_length,
         )
         with torch.no_grad():
-            outputs = reward_model(**inputs)
-            batch_scores = outputs.end_scores.squeeze(dim=-1).cpu().tolist()
+            if args.reward_model in {"ethz-spylab/reward_model"}:
+                outputs = reward_model(**inputs)
+                batch_scores = outputs.end_scores.squeeze(dim=-1).cpu().tolist()
+            elif args.reward_model in {"kaist-ai/janus-rm-7b"}:
+                inputs = {k: v.to(reward_model.device) for k, v in inputs.items()}
+                batch_scores = reward_model(**inputs).cpu().tolist()
+            else:
+                raise ValueError(f"Invalid reward model: {args.reward_model}")
             scores.extend(batch_scores)
 
     # Save the scores

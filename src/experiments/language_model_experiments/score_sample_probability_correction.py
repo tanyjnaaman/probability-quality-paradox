@@ -110,13 +110,17 @@ def main():
     raw_prompts: List[str] = df["prompt"].tolist()
     texts = [
         transform_prompt_and_text(
-            prompt, text, args.add_human_assistant_format, args.include_prompt
+            prompt,
+            text,
+            args.add_human_assistant_format,
+            args.include_prompt,
+            args.language_model,
         )
         for prompt, text in zip(raw_prompts, raw_texts)
     ]
     print(f"Examples: {texts[:3]}")
     prompts = [
-        transform_prompt(prompt, args.add_human_assistant_format)
+        transform_prompt(prompt, args.add_human_assistant_format, args.language_model)
         for prompt in raw_prompts
     ]
 

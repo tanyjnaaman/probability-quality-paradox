@@ -198,7 +198,10 @@ def _compute_nll_with_logitswarper(
         )
         assert all(
             text.startswith(prompt) for text, prompt in zip(texts, condition_on_prompts)
-        ), "All texts must start with their respective prompts."
+        ), (
+            "All texts must start with their respective prompts,"
+            f" {[(t, prompt) for t, prompt in zip(texts, condition_on_prompts) if not t.startswith(prompt)]}"
+        )
 
     # 1. Set up tokenizer
     # if batch_size > 1 (which generally leads to padding being required), and

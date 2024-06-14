@@ -20,24 +20,29 @@ To run our empirical experiment, we will need to:
 To do so, you can use our files or run the scripts to generate everything from scratch. 
 
 ### Option 1: download our files and generate the figures
-1. Download `data.zip` from [here]().
-2. Unzip the files into `src/language_model_experiments/data`.
-3. Download the cached intermediate outputs `.cache.zip` from [here]().
-4. Unzip the files into `src/language_model_experiments/.cache`.
+1. Download `data.zip` from [here]() and `data_dpo.zip` from [here]().
+2. Unzip the files into `src/language_model_experiments/data` and `src/language_model_experiments/data_dpo` respectively.
+3. Download the cached intermediate outputs `.cache.zip` from [here]() and `.cache_dpo.zip` from [here]().
+4. Unzip the files into `src/language_model_experiments/.cache` and `src/language_model_experiments/.cache_dpo` respectively.
 5. Generate the figures with 
 ```
 bash create_figures.sh
 ```
 
-Option 2: Run the experiment from scratch
-1. Generate all 25 corpora with:
+### Option 2: Run the experiment from scratch
+1. Generate all 25 corpora with both a RLHF-tuned and DPO-tuned model with:
 ```
 bash generate.sh
 ```
+This should generatee `.csv` files of generated text.
 2. Score all 25 corpora with:
 ```
 bash score_with_correction.sh
 ```
+Comment out files and model settings as needed. 
+For every `.csv` file, this should produce 3 files scoring the reward and log-probabilities of the generated strings.
+When this is done, move all files to `src/language_model_experiments/data`  and `src/language_model_experiments/data_dpo`, for the RLHF-tuned model and DPO-tuned model, respectively.
+
 3. Run the Independent Metropolis Hastings algorithm and generate the figures with:
 ```
 create_figures.sh

@@ -10,7 +10,12 @@ import transformers
 import pandas as pd
 import torch
 
+from src.experiments.language_model_experiments.utils.prompt_text_processing import (
+    transform_prompt,
+)
 
+
+# TODO: add arg to control where reward come from (from model, or p+/p)
 class ScriptArguments(BaseModel):
     model: str = Field(
         "meta-llama/Llama-2-7b-hf",
@@ -90,22 +95,29 @@ def main():
     parser = ArgumentParser(model=ScriptArguments)
     args = parser.parse_typed_args()
 
-    # Construct prompts
-    dataset = load_dataset("Anthropic/hh-rlhf")["test"]
+    # Construct prompts, fixed dataset
+    dataset = load_dataset("Anthropic/hh-rlhf")["test"].map(
+        lambda pair: {
+            "prompt": pair["chosen"].split("\n\n")[1].lstrip("Human:").strip()
+        }
+    )
     prompts = (
         dataset.map(
-            lambda pair: {
-                "prompt": (
-                    pair["chosen"].split("\n\n")[1].lstrip("Human:").strip()
-                    if not args.human_assistant_format
-                    else pair["chosen"].split("\n\n")[1].strip() + "\n\nAssistant:"
+            lambda row: {
+                "prompt": transform_prompt(
+                    row["prompt"], args.human_assistant_format, args.model
                 )
             }
         )
         .filter(lambda row: len(row["prompt"]) < args.max_length)
         .shuffle(seed=args.prompt_selection_seed)
         .select(range(args.num_prompts))
+        .to_pandas()["prompt"]
+        .tolist()
     )
+    assert (
+        len(prompts) == args.num_prompts
+    ), f"Expected {args.num_prompts} prompts, got {len(prompts)} prompts"
 
     # Load model
     model_kwargs = {}
@@ -146,8 +158,8 @@ def main():
         raise ValueError(f"Invalid sampling type: {args.sampling_type}")
 
     print(f"Sampling type: {args.sampling_type}, sampling kwargs: {sampling_kwargs}")
-    for row in tqdm(prompts):
-        batched_prompts = [row["prompt"]] * args.num_generations_per_prompt
+    for prompt in tqdm(prompts):
+        batched_prompts = [prompt] * args.num_generations_per_prompt
         sequences = pipeline(
             batched_prompts,
             do_sample=True if args.sampling_type != "greedy" else False,
@@ -161,12 +173,12 @@ def main():
         )
         assert len(sequences) == args.num_generations_per_prompt
         generated_texts = [
-            sequence[0]["generated_text"][len(row["prompt"].strip()) :].strip()
+            sequence[0]["generated_text"][len(prompt.strip()) :].strip()
             for sequence in sequences
         ]
         outputs["prompt"].extend(batched_prompts)
         outputs["generated_text"].extend(generated_texts)
-        print(f"Prompt completed: {row['prompt']}\nGenerated: {generated_texts[0]}")
+        print(f"Prompt completed: {prompt}\nGenerated: {generated_texts[0]}")
 
     # Save outputs
     save_path = (
