@@ -121,26 +121,26 @@ def compute_nll_with_decoding_algorithms(
     max_length: int,
     batch_size: int,
     condition_on_prompts: Optional[List[str]] = None,
-    top_k: int = 0,
-    top_p: float = 1.0,
-    typical_p: Optional[float] = None,
-    eta_cutoff: float = 0.0,
-    temperature: float = 1.0,
+    top_k: Optional[int] = None,
+    top_p: Optional[float] = None,
+    typical_p: Optional[Optional[float]] = None,
+    eta_cutoff: Optional[float] = None,
+    temperature: Optional[float] = None,
 ) -> List[float]:
     # instantiate warpers list
-    assert top_k >= 0, f"top_k must be >= 0, got {top_k}"
-    assert 0.0 < top_p <= 1.0, f"top_p must be in (0.0, 1.0], got {top_p}"
+    assert top_k is None or top_k >= 0, f"top_k must be >= 0, got {top_k}"
+    assert (
+        top_p is None or 0.0 < top_p <= 1.0
+    ), f"top_p must be in (0.0, 1.0], got {top_p}"
     assert temperature > 0.0, f"temperature must be > 0.0, got {temperature}"
     assert (
-        0.0 <= eta_cutoff < 1.0
+        eta_cutoff is None or 0.0 <= eta_cutoff < 1.0
     ), f"eta_cutoff must be in [0.0, 1.0), got {eta_cutoff}"
     assert (
-        typical_p is None or typical_p > 0.0
-    ), f"typical_p must be > 0.0, got {typical_p}"
+        typical_p is None or 0.0 < typical_p < 1.0
+    ), f"typical_p must be in (0.0, 1.0], got {typical_p}"
     warpers = LogitsProcessorList()
     min_tokens_to_keep = 1
-    if temperature is not None and temperature != 1.0:
-        warpers.append(TemperatureLogitsWarper(temperature))
     if top_k is not None and top_k != 0:
         warpers.append(
             TopKLogitsWarper(top_k=top_k, min_tokens_to_keep=min_tokens_to_keep)
@@ -149,7 +149,7 @@ def compute_nll_with_decoding_algorithms(
         warpers.append(
             TopPLogitsWarper(top_p=top_p, min_tokens_to_keep=min_tokens_to_keep)
         )
-    if typical_p is not None:
+    if typical_p is not None and typical_p < 1.0:
         warpers.append(
             TypicalLogitsWarper(mass=typical_p, min_tokens_to_keep=min_tokens_to_keep)
         )
@@ -158,7 +158,7 @@ def compute_nll_with_decoding_algorithms(
             EtaLogitsWarper(epsilon=eta_cutoff, min_tokens_to_keep=min_tokens_to_keep)
         )
 
-    return _compute_nll_with_logitswarper(
+    return _compute_nll_or_logitsum_with_logitswarper(
         texts=texts,
         model=model,
         tokenizer=tokenizer,
@@ -167,10 +167,71 @@ def compute_nll_with_decoding_algorithms(
         batch_size=batch_size,
         condition_on_prompts=condition_on_prompts,
         logits_warpers=warpers,
+        temperature=temperature,
+        return_summed_logits=False,
     )
 
 
-def _compute_nll_with_logitswarper(
+def compute_logitsums_with_decoding_algorithms(
+    texts: List[str],
+    model: AutoModelForCausalLM,
+    tokenizer: AutoTokenizer,
+    add_start_token: bool,
+    max_length: int,
+    batch_size: int,
+    condition_on_prompts: Optional[List[str]] = None,
+    top_k: Optional[int] = None,
+    top_p: Optional[float] = None,
+    typical_p: Optional[Optional[float]] = None,
+    eta_cutoff: Optional[float] = None,
+    temperature: Optional[float] = None,
+) -> List[float]:
+    # instantiate warpers list
+    assert top_k is None or top_k >= 0, f"top_k must be >= 0, got {top_k}"
+    assert (
+        top_p is None or 0.0 < top_p <= 1.0
+    ), f"top_p must be in (0.0, 1.0], got {top_p}"
+    assert temperature > 0.0, f"temperature must be > 0.0, got {temperature}"
+    assert (
+        eta_cutoff is None or 0.0 <= eta_cutoff < 1.0
+    ), f"eta_cutoff must be in [0.0, 1.0), got {eta_cutoff}"
+    assert (
+        typical_p is None or 0.0 < typical_p < 1.0
+    ), f"typical_p must be in (0.0, 1.0], got {typical_p}"
+    warpers = LogitsProcessorList()
+    min_tokens_to_keep = 1
+    if top_k is not None and top_k != 0:
+        warpers.append(
+            TopKLogitsWarper(top_k=top_k, min_tokens_to_keep=min_tokens_to_keep)
+        )
+    if top_p is not None and top_p < 1.0:
+        warpers.append(
+            TopPLogitsWarper(top_p=top_p, min_tokens_to_keep=min_tokens_to_keep)
+        )
+    if typical_p is not None and typical_p < 1.0:
+        warpers.append(
+            TypicalLogitsWarper(mass=typical_p, min_tokens_to_keep=min_tokens_to_keep)
+        )
+    if eta_cutoff is not None and eta_cutoff > 0.0:
+        warpers.append(
+            EtaLogitsWarper(epsilon=eta_cutoff, min_tokens_to_keep=min_tokens_to_keep)
+        )
+
+    return _compute_nll_or_logitsum_with_logitswarper(
+        texts=texts,
+        model=model,
+        tokenizer=tokenizer,
+        add_start_token=add_start_token,
+        max_length=max_length,
+        batch_size=batch_size,
+        condition_on_prompts=condition_on_prompts,
+        logits_warpers=warpers,
+        temperature=temperature,
+        return_summed_logits=True,
+    )
+
+
+def _compute_nll_or_logitsum_with_logitswarper(
     texts: List[str],
     model: AutoModelForCausalLM,
     tokenizer: AutoTokenizer,
@@ -178,8 +239,10 @@ def _compute_nll_with_logitswarper(
     max_length: int,
     batch_size: int,
     logits_warpers: LogitsProcessorList,
+    temperature: float,
     add_special_tokens: bool = False,
     condition_on_prompts: Optional[List[str]] = None,
+    return_summed_logits: bool = False,
 ) -> List[float]:
     """
     NOTE: lifted from https://github.com/huggingface/evaluate/blob/main/metrics/perplexity/perplexity.py
@@ -244,7 +307,7 @@ def _compute_nll_with_logitswarper(
         prompt_lengths = [0] * len(texts)
 
     # 3. Batch wise tokenization and scoring
-    nlls = []
+    output = []
     for i in tqdm(range(0, len(texts), batch_size)):
         batch = texts[i : i + batch_size]
         batch_prompt_lengths = prompt_lengths[i : i + batch_size]
@@ -300,33 +363,74 @@ def _compute_nll_with_logitswarper(
         with torch.no_grad():
             out_logits = model(encoded_batch, attention_mask=attn_mask).logits
 
-        # 3.3 shift logits and apply warpers
+        # 4. compute
+        # move one step since first token is given
         shift_logits = out_logits[..., :-1, :].contiguous()
-        shift_warped_logits = torch.cat(
-            [
-                logits_warpers(encoded_batch, shift_logits[:, i, :]).unsqueeze(dim=1)
-                for i in range(shift_logits.shape[1])  # we don't warp the first token
-            ],
-            dim=1,
-        )
         shift_labels = labels[..., 1:].contiguous()
         shift_attention_mask_batch = attn_mask[..., 1:].contiguous()
 
-        # 3.4 compute (conditional) nll
-        nlls_not_summed = (
-            CrossEntropyLoss(reduction="none")(
-                shift_warped_logits.transpose(1, 2), shift_labels
+        # compute (conditional) nll or modified probabilities
+        if not return_summed_logits:
+            if temperature != 1.0:
+                logits_warpers.append(TemperatureLogitsWarper(temperature))
+            shift_warped_logits = torch.cat(
+                [
+                    logits_warpers(encoded_batch, shift_logits[:, i, :]).unsqueeze(
+                        dim=1
+                    )
+                    for i in range(shift_logits.shape[1])
+                ],
+                dim=1,
             )
-            * shift_attention_mask_batch
-        )
+            output_not_summed = (
+                CrossEntropyLoss(reduction="none")(
+                    shift_warped_logits.transpose(1, 2), shift_labels
+                )
+                * shift_attention_mask_batch
+            )
+        else:
+            # only do temperature warping with renormalization
+            # since that is correct by definition
+            if temperature != 1.0:
+                temperature_warper = TemperatureLogitsWarper(temperature)
+                shift_warped_logits = torch.cat(
+                    [
+                        temperature_warper(
+                            encoded_batch, shift_logits[:, i, :]
+                        ).unsqueeze(dim=1)
+                        for i in range(shift_logits.shape[1])
+                    ],
+                    dim=1,
+                )
+
+            # get probabilities, then do remaining warping
+            shift_probabilities = torch.nn.functional.softmax(shift_logits, dim=-1)
+            shift_warped_probabilities = torch.cat(
+                [
+                    logits_warpers(
+                        encoded_batch, shift_probabilities[:, i, :]
+                    ).unsqueeze(dim=1)
+                    for i in range(shift_probabilities.shape[1])
+                ],
+                dim=1,
+            )
+            # select probability at each shift label
+            output_not_summed = (
+                torch.gather(
+                    shift_warped_probabilities, -1, shift_labels.unsqueeze(-1)
+                ).squeeze(-1)
+                * shift_attention_mask_batch
+            )
+
         # could have nan (padding tokens) so we zero them out
-        nlls_not_summed = torch.nan_to_num(nlls_not_summed, nan=0.0)
+        output_not_summed = torch.nan_to_num(output_not_summed, nan=0.0)
+
         # infinities shouldn't happen, but they can due to randomness in cuda
         # see https://huggingface.co/docs/diffusers/en/using-diffusers/reproducibility
         # so we clamp them at -ln(10^-11) ~= 25.0
-        nlls_not_summed = torch.clamp(nlls_not_summed, min=0.0, max=25.0)
+        output_not_summed = torch.clamp(output_not_summed, min=0.0, max=25.0)
 
-        # 3.5 zero out the nlls for the prompt
+        # zero out the nlls for the prompt
         for i, prompt_length in enumerate(batch_prompt_lengths):
             start_idx = (
                 shift_attention_mask_batch[i].nonzero(as_tuple=False).flatten().min()
@@ -334,14 +438,18 @@ def _compute_nll_with_logitswarper(
             assert shift_attention_mask_batch[i, start_idx] == 1 and (
                 shift_attention_mask_batch[i, start_idx - 1] == 0 or start_idx == 0
             )
-            nlls_not_summed[i, start_idx : start_idx + prompt_length] = 0.0
-            assert not nlls_not_summed[i].isnan().any()
-            assert not nlls_not_summed[i].isinf().any(), (
+            output_not_summed[i, start_idx : start_idx + prompt_length] = 0.0
+            assert not output_not_summed[i].isnan().any()
+            assert not output_not_summed[i].isinf().any(), (
                 f"Infinity encountered! Text: {batch[i]},  prompt length:"
-                f" {prompt_length}, start_idx: {start_idx}, nlls:"
-                f" {nlls_not_summed[i]}"
+                f" {prompt_length}, start_idx: {start_idx}, outputs:"
+                f" {output_not_summed[i]}"
             )
-        nll_batch = nlls_not_summed.sum(dim=1)
-
-        nlls += nll_batch.tolist()
-    return nlls
+            assert output_not_summed[i].sum() >= 0.0, (
+                f"Sum of logits/nlls should be non-negative. Text: {batch[i]},  prompt"
+                f" length: {prompt_length}, start_idx: {start_idx}, outputs:"
+                f" {output_not_summed[i]}"
+            )
+        output_batch = output_not_summed.sum(dim=1)
+        output.extend(output_batch.tolist())
+    return output

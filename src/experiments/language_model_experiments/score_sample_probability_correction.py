@@ -12,6 +12,7 @@ from src.experiments.language_model_experiments.utils.prompt_text_processing imp
     transform_prompt_and_text,
 )
 from src.experiments.language_model_experiments.utils.compute_nll import (
+    compute_logitsums_with_decoding_algorithms,
     compute_nll_with_decoding_algorithms,
 )
 
@@ -174,11 +175,25 @@ def main():
         typical_p=None,
         temperature=1.0,
     )
+    logitsums = compute_logitsums_with_decoding_algorithms(
+        texts=texts,
+        model=model,
+        tokenizer=tokenizer,
+        add_start_token=args.add_start_token,
+        max_length=args.max_length,
+        batch_size=args.batch_size,
+        condition_on_prompts=prompts if args.condition_on_prompt else None,
+        top_k=0,
+        top_p=1.0,
+        typical_p=None,
+        temperature=1.0,
+    )
 
     # Save
     df["original_negative_log_probability"] = nlls
     df["samplingbiased_negative_log_probability"] = biased_nlls
     df["nll_correction_texts"] = texts
+    df["samplingbiased_logitsums"] = logitsums
     if not args.save_path:
         print(
             "No save path provided. Saving to the input file with"

@@ -117,7 +117,7 @@ def main():
     }
 
     num_corpora = 2000
-    num_samples_per_corpus = 200_000
+    num_samples_per_corpus = 2000
 
     # 3. Plotting
     fig, axs = plt.subplots(1, 2, figsize=(20, 10), dpi=300)
@@ -336,9 +336,11 @@ def do_imh_bootstrap(
                 (
                     np.exp(
                         np.array(
-                            -sample["original_negative_log_probability"]
+                            -sample["samplingbiased_logitsums"]
+                            # -sample["original_negative_log_probability"]
                             - prev["samplingbiased_negative_log_probability"]
-                            + prev["original_negative_log_probability"]
+                            # + prev["original_negative_log_probability"]
+                            + prev["samplingbiased_logitsums"]
                             + sample["samplingbiased_negative_log_probability"]
                         ).astype(np.float128)
                     ).item()
